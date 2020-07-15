@@ -115,6 +115,62 @@ class TestStructuredDataset(unittest.TestCase):
             data_set[leaf_name_1]["x_2"]
 
 
+    def test_kill(self) -> None:
+        data_set = structures.StructuredDataset(self._test_path,
+                                                "test_kill",
+                                                {})
+
+        x = numpy.linspace(0, 10, 1000)
+        # add branches with nested branches and data
+        n_branches = 3
+        for i_branch in range(n_branches):
+            leaf = data_set.add_leaf("leaf_{:d}".format(i_branch))
+            self.add_leafes_recursive(leaf, i_branch)
+            self.add_data_in_last_leaf(leaf, x)
+        data_set.write(exist_ok=True)
+
+        # remove some leafes
+        with self.assertRaises(PermissionError):
+            data_set["leaf_2"] = None
+
+        # toggle overwrite
+        data_set.overwrite = True
+        data_set["leaf_2"] = None
+        data_set.enable_auto_branching = False  # need to turn off auto branching otherwise the call of data_set["leaf_2"] will create a new branch
+
+        with self.assertRaises(KeyError):
+            data_set["leaf_2"]
+
+        data_set.write(exist_ok=True, hard=True)
+
+        # check if the leaf still exist on disk
+        self.assertFalse((data_set.path / "leaf_2").exists())
+
+        # try to remove the entire data-set
+        path = data_set.path
+        data_set.overwrite = False
+        with self.assertRaises(PermissionError):
+            data_set.remove()
+        self.assertTrue(path.exists())
+
+        data_set.overwrite = True
+        data_set.remove()
+        self.assertFalse(path.exists())
+
+    def add_leafes_recursive(self, parent_leaf: structures.Leaf, depth) -> None:
+        if depth > 0:
+            for i_leaf in range(depth):
+                leaf = parent_leaf.add_leaf("leaf_{:d}".format(i_leaf))
+                self.add_leafes_recursive(leaf, depth-1)
+
+    def add_data_in_last_leaf(self, leaf: structures.Leaf, data: numpy.ndarray, name: str = "data") -> None:
+        if not leaf.has_leaves:
+            leaf.add_data(name, data)
+        else:
+            for key in leaf.keys():
+                if isinstance(leaf[key], structures.Leaf):
+                    self.add_data_in_last_leaf(leaf[key], data, name)
+
     def tearDown(self):
         # clean up the test environment
         # TODO First need to write the delete function (again)

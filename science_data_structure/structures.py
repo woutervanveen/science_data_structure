@@ -87,6 +87,13 @@ class Leaf(Node):
         for data_node in data:
             self._content[data_node.stem] = Data(self.path,
                                             data_node.stem)
+
+    def remove_item(self, key: str) -> Node:
+        if self._overwrite:
+            self._kill += [self._content[key]]
+            return self._content.pop(key)
+        raise PermissionError
+
     def __getitem__(self, name: str) -> Node:
         try:
             return self._content[name]
@@ -104,7 +111,10 @@ class Leaf(Node):
         TODO handle setting leaf or node with None
         TODO handle the deletion of the node when it is overwritten by another node
         """
-        if not isinstance(item, Node):
+        if item is None:
+            if self._enable_auto_branching:
+                self.remove_item(key)
+        elif not isinstance(item, Node):
             if isinstance(item, numpy.ndarray):
                 if self._enable_auto_branching and key not in self._content:
                     self._content[key] = Data(self.path,
@@ -157,6 +167,25 @@ class Leaf(Node):
     def keys(self) -> List[str]:
         return list(self._content.keys())
 
+    def _remove(self) -> None:
+        for key in self._content.keys():
+            self._content[key]._remove()
+
+        self._clear_kill()
+
+        self.path.rmdir()
+
+    def _clear_kill(self) -> None:
+        for node in self._kill:
+            node._remove()
+            self._kill.remove(node)
+
+    @property
+    def has_leaves(self) -> bool:
+        for key in self._content.keys():
+            if isinstance(self._content[key], Leaf):
+                return True
+        return False
 
 class StructuredDataset(Leaf):
     """
@@ -174,13 +203,24 @@ class StructuredDataset(Leaf):
                          overwrite = overwrite)
 
     def write(self, 
-              exist_ok: bool =False) -> None:
+              exist_ok: bool =False,
+              hard: bool = False) -> None:
         if self.path.exists and not exist_ok:
             raise FileExistsError
         self.path.mkdir(exist_ok=True)
-    
+
+        if hard:
+            # empty all the kill rings
+            for node in self._kill:
+                node._remove()
+                self._kill.remove(node)
+
+            for key in self._content.keys():
+                self._content[key]._clear_kill()
+
         for node_name in self._content.keys():
             self._content[node_name].write()
+
 
     @staticmethod
     def read(path: Path) -> "StructuredDataset":
@@ -189,10 +229,8 @@ class StructuredDataset(Leaf):
 
         # leafs
         leafs = filter(lambda x: x.is_dir(), files)
-        
         # data
         data = filter(lambda x: x.suffix  == ".npy", files)
-        
         content = {}
         for leaf in leafs:
             content[leaf.name] = Leaf(path, 
@@ -206,8 +244,11 @@ class StructuredDataset(Leaf):
 
         return StructuredDataset(path.parent, path.stem, content)
 
-
-
+    def remove(self) -> None:
+        if self._overwrite:
+            self._remove()
+        else:
+            raise PermissionError
 
 class Data(Node):
 
@@ -254,4 +295,6 @@ class Data(Node):
             self._data = numpy.load(self.path)
         return self._data
 
+    def _remove(self) -> None:
+        self.path.unlink()
 

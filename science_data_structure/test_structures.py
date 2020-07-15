@@ -10,7 +10,7 @@ class TestStructuredDataset(unittest.TestCase):
     """
 
     def setUp(self):
-        self._test_path = pathlib.Path("/home/wgvanveen/Desktop/test")
+        self._test_path = pathlib.Path("../test")
         self._test_path.mkdir(exist_ok=True)
 
     def test_writing(self):

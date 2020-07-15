@@ -16,7 +16,7 @@ class TestStructuredDataset(unittest.TestCase):
     def test_writing(self):
         leaf_name = "leaf_1"
         # create an empty data-set
-        dataset = structures.StructuredDataset(pathlib.Path("/home/wgvanveen/Desktop"),
+        dataset = structures.StructuredDataset(self._test_path,
                                                "test_set",
                                                {},
                                                overwrite=True)
@@ -49,7 +49,7 @@ class TestStructuredDataset(unittest.TestCase):
     def test_leaves(self):
         leaf_name = "leaf_1"
         # create an empty data-set
-        dataset = structures.StructuredDataset(pathlib.Path("/home/wgvanveen/Desktop"),
+        dataset = structures.StructuredDataset(self._test_path,
                                                "test_set",
                                                {},
                                                overwrite=False)
@@ -97,7 +97,6 @@ class TestStructuredDataset(unittest.TestCase):
         data_set[leaf_name_1]["x"] = x
         try:
             data_set[leaf_name_1]["x"]
-
         except KeyError:
             self.fail("auto branching failed")
 
@@ -113,6 +112,18 @@ class TestStructuredDataset(unittest.TestCase):
 
         with self.assertRaises(KeyError):
             data_set[leaf_name_1]["x_2"]
+
+
+
+        # test nested auto branching
+        data_set.enable_auto_branching = True
+        leaf_branched = data_set[leaf_name_1][leaf_name_1][leaf_name_1]
+        leaf_nested_path = leaf_branched.path
+        self.assertTrue((data_set.path / leaf_name_1 / leaf_name_1 / leaf_name_1) == leaf_nested_path)
+
+        data_set.write(exist_ok=True)
+        self.assertTrue(leaf_nested_path.exists())
+
 
 
     def test_kill(self) -> None:
@@ -172,9 +183,12 @@ class TestStructuredDataset(unittest.TestCase):
                     self.add_data_in_last_leaf(leaf[key], data, name)
 
     def tearDown(self):
-        # clean up the test environment
-        # TODO First need to write the delete function (again)
-        pass
-
+        for test_structure in self._test_path.iterdir():
+            if test_structure.suffix == ".struct":
+                data_set = structures.StructuredDataset.read(test_structure)
+                data_set.overwrite = True
+                data_set.remove()
+        self._test_path.rmdir()
+        
 if __name__ == "__main__":
     unittest.main()

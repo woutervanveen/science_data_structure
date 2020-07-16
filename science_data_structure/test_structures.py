@@ -125,7 +125,6 @@ class TestStructuredDataset(unittest.TestCase):
         self.assertTrue(leaf_nested_path.exists())
 
 
-
     def test_kill(self) -> None:
         data_set = structures.StructuredDataset(self._test_path,
                                                 "test_kill",
@@ -136,11 +135,11 @@ class TestStructuredDataset(unittest.TestCase):
         n_branches = 3
         for i_branch in range(n_branches):
             leaf = data_set.add_leaf("leaf_{:d}".format(i_branch))
-            self.add_leafes_recursive(leaf, i_branch)
+            self.add_leafs_recursive(leaf, i_branch)
             self.add_data_in_last_leaf(leaf, x)
         data_set.write(exist_ok=True)
 
-        # remove some leafes
+        # remove some leafs
         with self.assertRaises(PermissionError):
             data_set["leaf_2"] = None
 
@@ -168,11 +167,11 @@ class TestStructuredDataset(unittest.TestCase):
         data_set.remove()
         self.assertFalse(path.exists())
 
-    def add_leafes_recursive(self, parent_leaf: structures.Leaf, depth) -> None:
+    def add_leafs_recursive(self, parent_leaf: structures.Leaf, depth) -> None:
         if depth > 0:
             for i_leaf in range(depth):
                 leaf = parent_leaf.add_leaf("leaf_{:d}".format(i_leaf))
-                self.add_leafes_recursive(leaf, depth-1)
+                self.add_leafs_recursive(leaf, depth-1)
 
     def add_data_in_last_leaf(self, leaf: structures.Leaf, data: numpy.ndarray, name: str = "data") -> None:
         if not leaf.has_leaves:

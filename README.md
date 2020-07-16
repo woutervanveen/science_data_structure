@@ -1,5 +1,5 @@
-# science_data_structure
-A Python library to store large data-sets using numpy 
+# Science data structure
+A Python library to store large data-sets using numpy. The data is stored in a file tree and can be easily be browsed with your computer. 
 
 
 ## Concept

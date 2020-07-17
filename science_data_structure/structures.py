@@ -22,7 +22,7 @@ class Node(abc.ABC):
     def read(self) -> "Node":
         pass
 
-class Leaf(Node):
+class Branch(Node):
 
     def __init__(self,
                  parent_path: Path,
@@ -37,6 +37,7 @@ class Leaf(Node):
         self._overwrite = overwrite
         self._kill = []  # type: List[Node]
 
+
     @property
     def name(self) -> str:
         return self._name
@@ -50,43 +51,45 @@ class Leaf(Node):
         for node_name in self._content.keys():
             self._content[node_name].write()
 
-    def add_leaf(self,
-                 name: str) -> "Leaf":
+    def add_branch(self,
+                 name: str) -> "Branch":
         if name not in self._content or self._overwrite:
-            leaf = Leaf(self.path,
+            branch = Branch(self.path,
                         name,
                         {})
-            self._content[name] = leaf
-            return  leaf
+            self._content[name] = branch
+            return  branch
         raise FileExistsError
 
     def add_data(self,
                  name: str,
-                 data: numpy.ndarray):
+                 data):
         if name not in self._content or self._overwrite:
-            data_node = Data(self.path, name)
-            data_node.data = data
-            self._content[name] = data_node
+            if isinstance(data, numpy.ndarray):
+                data_node = LeafNumpy(self.path,
+                                      name,
+                                      overwrite=self._overwrite)
+                data_node.data = data
+                self._content[name] = data_node
         return self._content[name]
 
-    def read(self) -> "Leaf":
+    def read(self) -> "Branch":
         files = list(self.path.glob("*"))
 
-        # leafs
-        leafs = filter(lambda x: x.is_dir(), files)
+        # branchs
+        branchs = filter(lambda x: x.suffix != ".leaf", files)
 
         # data
-        data = filter(lambda x: x.suffix == ".npy", files)
+        data = filter(lambda x: x.suffix == ".leaf", files)
 
-        for leaf in leafs:
-            self._content[leaf.name] = Leaf(self.path, 
-                                            leaf.name,
+        for branch in branchs:
+            self._content[branch.name] = Branch(self.path, 
+                                                branch.name,
                                             {})
-            self._content[leaf.name].read()
+            self._content[branch.name].read()
 
         for data_node in data:
-            self._content[data_node.stem] = Data(self.path,
-                                            data_node.stem)
+            self._content[data_node.name] = Leaf.initialize(data_node, data_node.name)
 
     def remove_item(self, key: str) -> Node:
         if self._overwrite:
@@ -100,15 +103,15 @@ class Leaf(Node):
         except KeyError:
             # the variable does not exist
             if self._enable_auto_branching:
-                # create a new leaf based on the name provided
-                return self.add_leaf(name)
+                # create a new branch based on the name provided
+                return self.add_branch(name)
 
         raise KeyError
 
     def __setitem__(self, key: str, item) -> None:
         """
         TODO check if the key is of value string
-        TODO handle setting leaf or node with None
+        TODO handle setting branch or node with None
         TODO handle the deletion of the node when it is overwritten by another node
         """
         if item is None:
@@ -117,23 +120,25 @@ class Leaf(Node):
         elif not isinstance(item, Node):
             if isinstance(item, numpy.ndarray):
                 if self._enable_auto_branching and key not in self._content:
-                    self._content[key] = Data(self.path,
-                                              key)
+                    self._content[key] = LeafNumpy(self.path,
+                                                   key)
+                    self._content[key].data = item
                 elif key in self._content and self._overwrite:
                     self._kill += [self._content[key]]
-                    self._content[key] = Data(self.path,
+                    self._content[key] = Leaf(self.path,
                                               key)
+                    self._content[key].data = item
                 elif key not in self._content:
                     raise PermissionError
                 else:
                     raise FileExistsError
         else:
             if self._enable_auto_branching and key not in self._content:
-                self._content[key] = Leaf(self.path,
+                self._content[key] = Branch(self.path,
                                           key)
             elif key in self._content and self._overwrite:
                 self._kill += [self._content[key]]
-                self._content[key] = Leaf(self.path,
+                self._content[key] = Branch(self.path,
                                           key)
             elif key not in self._content:
                 raise PermissionError
@@ -149,7 +154,7 @@ class Leaf(Node):
         self._enable_auto_branching = enable_auto_branching
 
         for key in self._content.keys():
-            if isinstance(self._content[key], Leaf):
+            if isinstance(self._content[key], Branch):
                 self._content[key].enable_auto_branching = enable_auto_branching
 
     @property
@@ -160,8 +165,7 @@ class Leaf(Node):
     def overwrite(self, overwrite: bool) -> None:
         self._overwrite = overwrite
         for key in self._content.keys():
-            if isinstance(self._content[key], Leaf):
-                self._content[key].overwrite = overwrite
+            self._content[key].overwrite = overwrite
 
 
     def keys(self) -> List[str]:
@@ -183,13 +187,13 @@ class Leaf(Node):
     @property
     def has_leaves(self) -> bool:
         for key in self._content.keys():
-            if isinstance(self._content[key], Leaf):
+            if isinstance(self._content[key], Branch):
                 return True
         return False
 
-class StructuredDataset(Leaf):
+class StructuredDataSet(Branch):
     """
-    StructuredDataset the base class of Leaf
+    StructuredDataSet the base class of Branch
     """
     def __init__(self,
                  path: Path,
@@ -223,26 +227,30 @@ class StructuredDataset(Leaf):
 
 
     @staticmethod
-    def read(path: Path) -> "StructuredDataset":
+    def read(path: Path) -> "StructuredDataSet":
+        """
+        TODO fix bug
+        """
         # load all the files
         files = list(path.glob("*"))
 
-        # leafs
-        leafs = filter(lambda x: x.is_dir(), files)
+        # branches
+        branches = filter(lambda x: x.suffix != ".leaf", files)
+
         # data
-        data = filter(lambda x: x.suffix  == ".npy", files)
+        data = filter(lambda x: x.suffix  == ".leaf", files)
         content = {}
-        for leaf in leafs:
-            content[leaf.name] = Leaf(path, 
-                                      leaf.name,
+        for branch in branches:
+            content[branch.name] = Branch(path, 
+                                      branch.name,
                                       {})
-            content[leaf.name].read()
+            content[branch.name].read()
 
         for data_node in data:
-            content[data_node.stem] = Data(path,
-                                           data_node.stem)
+            content[data_node.name] = Leaf.initialize(path,
+                                                      data_node.name)
 
-        return StructuredDataset(path.parent, path.stem, content)
+        return StructuredDataSet(path.parent, path.stem, content)
 
     def remove(self) -> None:
         if self._overwrite:
@@ -250,51 +258,153 @@ class StructuredDataset(Leaf):
         else:
             raise PermissionError
 
-class Data(Node):
 
+class Leaf(Node):
+    """
+    A leaf is a folder containing a single data-format, and description of the variable
+    """
     def __init__(self, 
                  parent_path: Path,
-                 name: str) -> None:
+                 name: str,
+                 overwrite: bool = False) -> None:
         self._parent_path = parent_path  # type: Path
         self._name = name  # type: str
+        self._overwrite = overwrite  # type: bool
+
+        # class specific
         self._data = None  # type: numpy.ndarray
-
         self._is_read = False  # type: bool
-    
-    @property
-    def data(self) -> numpy.ndarray:
-        return self._data
-    
-    @data.setter
-    def data(self, data: numpy.ndarray) -> None:
-        self._data = data
-        self.is_read = True
+        self._is_changed = False  # type: bool
 
+    # functions
+    def write(self) -> None:
+        if not self.leaf_path.exists():
+            self.leaf_path.mkdir()
+        self._write_child()
+
+    # properties
     @property
     def is_read(self) -> bool:
         return self._is_read
-    
-    @is_read.setter
-    def is_read(self, is_read: bool) -> None:
-        self._is_read = is_read
+
+    @property
+    def is_changed(self) -> bool:
+        return self._is_changed
 
     @property
     def name(self) -> str:
         return self._name
 
     @property
-    def path(self) -> Path:
-        return self._parent_path / "{:s}.npy".format(self.name)
+    def data(self) -> numpy.ndarray:
+        return self._get_data()
 
-    def write(self) -> None:
-        if self.read:
-            numpy.save(self.path, self._data)
-    
+    @data.setter
+    def data(self, data) -> None:
+        self._set_data(data)
+
+    @property
+    def leaf_path(self) -> Path:
+        return self._parent_path / "{:s}.leaf".format(self._name)
+
+    @property
+    def overwrite(self) -> bool:
+        return self._overwrite
+
+    @overwrite.setter
+    def overwrite(self, overwrite: bool) -> None:
+        self._overwrite = overwrite
+
+    # abstract methods
+    @abc.abstractmethod
     def read(self) -> numpy.ndarray:
-        if not self.is_read:
-            self._data = numpy.load(self.path)
+        raise NotImplementedError("Must override the read leaf read function")
+
+    @abc.abstractmethod
+    def _get_data(self):
+        raise NotImplementedError("Must override the _get_data function")
+
+    @abc.abstractmethod
+    def _set_data(self):
+        raise NotImplementedError("Must override the _set_data function")
+
+    @abc.abstractmethod
+    def _remove(self) -> None:
+        raise NotImplementedError("Must override the _remove function")
+   
+    @abc.abstractmethod
+    def _write_child(self) -> None:
+        raise NotImplementedError("Must override the write function")
+
+    @abc.abstractproperty
+    def path(self) -> Path:
+        raise NotImplementedError("Path not implemented")
+
+    @staticmethod
+    def initialize(path: Path,
+                   name: str) -> "Leaf":
+        # read all the non-hidden files
+        content = list(path.glob("./*"))
+        content = list(filter(lambda x: not x.stem.startswith("."), content))
+
+        if len(content) > 1:
+            print(content)
+            raise FileNotFoundError("To many files in the path: {:s}".format(str(path)))
+
+        if content[0].suffix == ".npy":
+            return LeafNumpy(path.parent, name.replace(".leaf", ""))
+
+
+class LeafPandas(Leaf):
+    """
+    Class to hold data concerning the pandas data-frame
+    """
+    def __init__(parent_path: Path,
+                 name: str) -> None:
+        super().__init__(parent_path,
+                         name)
+
+class LeafNumpy(Leaf):
+    """
+    Class to hold data with the base numpy
+    """
+    def __init__(self, parent_path: Path, name: str, overwrite: bool = False) -> None:
+        super().__init__(parent_path, name, overwrite=overwrite)
+
+        self._data = None  # type: numpy.ndarray
+
+    # Methods overridden
+    def read(self) -> numpy.ndarray:
+        self._data = numpy.load(self.path)
+
+    def _get_data(self):
+        if not self._is_read:
+            self.read()
         return self._data
 
+    def _set_data(self, data: numpy.ndarray) -> None:
+        self._data = data
+        self._is_changed = True
+
     def _remove(self) -> None:
-        self.path.unlink()
+        if self.path.exists() and self._overwrite:
+            self.path.unlink()
+            self.leaf_path.rmdir()
+        elif self.path.exists() and not self._overwrite:
+            raise PermissionError
+
+    def _write_child(self) -> None:
+        """
+        Create a folder with the .leaf extension,
+        place the numpy array inside,
+        add meta data in the .leaf.json file
+        TODO -> if changed? 
+        """
+        if self._is_changed:
+            if not self.path.exists() or self._overwrite:
+                numpy.save(self.path, self._data)
+
+    @property
+    def path(self) -> Path:
+        return self.leaf_path / "data.npy"
 

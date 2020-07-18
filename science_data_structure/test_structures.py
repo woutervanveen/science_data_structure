@@ -77,9 +77,6 @@ class TestStructuredDataset(unittest.TestCase):
         except FileExistsError:
             self.fail("dataset.add_branch raised a FileExistsError")
 
-    def test_auto_branching(self) -> None:
-        pass
-
     def test_kill(self) -> None:
         data_set = structures.StructuredDataSet(self._test_path,
                                                 "test_kill",
@@ -102,7 +99,7 @@ class TestStructuredDataset(unittest.TestCase):
         data_set["branch_2"] = None
         self.assertFalse("branch_2" in data_set.keys())
 
-        data_set.write(exist_ok=True, hard=True)
+        data_set.write(exist_ok=True)
 
         # check if the branch still exist on disk
         self.assertFalse((data_set.path / "branch_2").exists())
@@ -118,7 +115,32 @@ class TestStructuredDataset(unittest.TestCase):
         data_set.remove()
         self.assertFalse(path.exists())
 
-<<<<<<< HEAD
+    def test_remove(self):
+        data_set = structures.StructuredDataSet(self._test_path,
+                                                "test_remove",
+                                                {})
+        branch = data_set["mosquito"]["free"]
+        branch["x"] = numpy.linspace(0, 1000, 1000)
+        branch["y"] = numpy.linspace(0, 1000, 1000)
+
+        data_set.write(exist_ok=True)
+
+        data_set.overwrite = True
+        path_x = branch["x"].path
+        branch["x"] = None
+
+        data_set.write(exist_ok=True)
+
+        self.assertFalse(path_x.exists())
+
+        path_y = branch["y"].path
+
+        branch["y"] = structures.Branch(branch.path, "y", {})
+
+        data_set.write(exist_ok=True)
+
+        self.assertFalse(path_y.exists())
+    
     def test_read(self) -> None:
         data_set = structures.StructuredDataSet(self._test_path,
                                                 "read_write",
@@ -130,13 +152,12 @@ class TestStructuredDataset(unittest.TestCase):
         for i_branch in range(n_branches):
             branch = data_set["branch_{:d}".format(i_branch)]
             self.add_branches_recursive(branch, depth)
-=======
+
     def add_leafs_recursive(self, parent_leaf: structures.Leaf, depth) -> None:
         if depth > 0:
             for i_leaf in range(depth):
                 leaf = parent_leaf.add_leaf("leaf_{:d}".format(i_leaf))
                 self.add_leafs_recursive(leaf, depth-1)
->>>>>>> master
 
             # place a random variable in each branch
             self.add_data_in_all_branches(branch,

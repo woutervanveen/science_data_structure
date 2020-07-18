@@ -89,7 +89,7 @@ class Branch(Node):
             self._content[data_node.with_suffix("").name] = Leaf.initialize(data_node.with_suffix(""),
                                                                             data_node.with_suffix("").name)
 
-    def remove_item(self, key: str) -> Node:
+    def _remove_item(self, key: str) -> Node:
         if self._overwrite:
             self._kill += [self._content[key]]
             return self._content.pop(key)
@@ -109,7 +109,7 @@ class Branch(Node):
         """
         if item is None:
             if self._overwrite:
-                self.remove_item(key)
+                self._remove_item(key)
             else:
                 raise PermissionError
         elif not isinstance(item, Node):
@@ -133,8 +133,7 @@ class Branch(Node):
                                           key)
             elif key in self._content and self._overwrite:
                 self._kill += [self._content[key]]
-                self._content[key] = Branch(self.path,
-                                          key)
+                self._content[key] = item
             elif key not in self._content:
                 raise PermissionError
             else:
@@ -166,6 +165,8 @@ class Branch(Node):
         for node in self._kill:
             node._remove()
             self._kill.remove(node)
+        for branch in self.branches:
+            branch._clear_kill()
 
     @property
     def has_leaves(self) -> bool:
@@ -220,25 +221,27 @@ class StructuredDataSet(Branch):
                          overwrite = overwrite)
 
     def write(self, 
-              exist_ok: bool =False,
-              hard: bool = False) -> None:
+              exist_ok: bool =False) -> None:
         if self.path.exists and not exist_ok:
             raise FileExistsError
         self.path.mkdir(exist_ok=True)
 
-        if hard:
-            # empty all the kill rings
-            for node in self._kill:
-                node._remove()
-                self._kill.remove(node)
+        # empty all the kill rings
+        for node in self._kill:
+            node._remove()
+            self._kill.remove(node)
 
-            for key in self._content.keys():
-                self._content[key]._clear_kill()
+        for key in self._content.keys():
+            self._content[key]._clear_kill()
 
         for node_name in self._content.keys():
             self._content[node_name].write()
 
-
+    def remove(self):
+        if self._overwrite:
+            self._remove()
+        else:
+            raise PermissionError
     @staticmethod
     def read(path: Path) -> "StructuredDataSet":
         # load all the files
@@ -261,12 +264,6 @@ class StructuredDataSet(Branch):
                                                       data_node.name)
 
         return StructuredDataSet(path.parent, path.stem, content)
-
-    def remove(self) -> None:
-        if self._overwrite:
-            self._remove()
-        else:
-            raise PermissionError
 
 
 class Leaf(Node):
@@ -364,7 +361,6 @@ class Leaf(Node):
         content = list(filter(lambda x: not x.stem.startswith("."), content))
 
         if len(content) > 1:
-            print(content)
             raise FileNotFoundError("To many files in the path: {:s}".format(str(path)))
 
         if content[0].suffix == ".npy":
@@ -430,3 +426,6 @@ class LeafNumpy(Leaf):
                 if numpy.array_equal(self.data, other.data):
                     return True
         return False
+
+    def __str__(self) -> str:
+        return "<LeafNumpy {:s}>".format(str(self.path))

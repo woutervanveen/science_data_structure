@@ -19,7 +19,8 @@ class TestStructuredDataset(unittest.TestCase):
                                                 "data_formats",
                                                 {})
 
-        data_set["branch_1"]["branch_2"]["leaf"] = numpy.random.random((10, 100))
+        data_set["branch_1"]["branch_2"]["leaf"] \
+            = numpy.random.random((10, 100))
 
         data_set.write(exist_ok=True)
 
@@ -155,8 +156,7 @@ class TestStructuredDataset(unittest.TestCase):
         # toggle overwrite
         data_set.overwrite = True
         data_set["branch_2"] = None
-        data_set.enable_auto_branching = False  # need to turn off auto branching otherwise the call of data_set["branch_2"] will create a new branch
-
+        data_set.enable_auto_branching = False  
         with self.assertRaises(KeyError):
             data_set["branch_2"]
 
@@ -177,22 +177,60 @@ class TestStructuredDataset(unittest.TestCase):
         self.assertFalse(path.exists())
 
     def test_read(self) -> None:
-        pass
+        data_set = structures.StructuredDataSet(self._test_path,
+                                                "read_write",
+                                                {})
 
+        # fill up the data-set with random data
+        n_branches = 10
+        depth = 3
+        for i_branch in range(n_branches):
+            branch = data_set["branch_{:d}".format(i_branch)]
+            self.add_branches_recursive(branch, depth)
 
-    def add_branches_recursive(self, parent_branch: structures.Branch, depth) -> None:
+            # place a random variable in each branch
+            self.add_data_in_all_branches(branch,
+                                          numpy.random.random((100, 100)),
+                                          name="data_{:d}".format(i_branch))
+        data_set.write(exist_ok=True)
+
+        data_set_read = structures.StructuredDataSet.read(data_set.path)
+        
+        # compare the two data-sets
+        self.assertEqual(data_set_read, data_set)
+
+        # remove part of the data_set_read
+        data_set_read.overwrite = True
+        data_set_read["branch_0"] = None
+        self.assertNotEqual(data_set_read, data_set)
+
+    def add_branches_recursive(self,
+                               parent_branch: structures.Branch,
+                               depth: int) -> None:
         if depth > 0:
             for i_branch in range(depth):
-                branch = parent_branch.add_branch("branch_{:d}".format(i_branch))
+                branch \
+                    = parent_branch.add_branch("branch_{:d}".format(i_branch))
                 self.add_branches_recursive(branch, depth-1)
 
-    def add_data_in_last_branch(self, branch: structures.Branch, data: numpy.ndarray, name: str = "data") -> None:
+    def add_data_in_last_branch(self, branch: structures.Branch,
+                                data: numpy.ndarray,
+                                name: str = "data") -> None:
         if not branch.has_leaves:
             branch.add_data(name, data)
         else:
             for key in branch.keys():
                 if isinstance(branch[key], structures.Branch):
                     self.add_data_in_last_branch(branch[key], data, name)
+
+    def add_data_in_all_branches(self, branch: structures.Branch, data:
+                                 numpy.ndarray, name: str = "data") -> None:
+        for sub_branch in branch.branches:
+            self.add_data_in_all_branches(sub_branch,
+                                          data,
+                                          name=name)
+            sub_branch[name] = data
+
     def tearDown(self):
         for test_structure in self._test_path.iterdir():
             if test_structure.suffix == ".struct":

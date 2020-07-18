@@ -89,7 +89,8 @@ class Branch(Node):
             self._content[branch.name].read()
 
         for data_node in data:
-            self._content[data_node.name] = Leaf.initialize(data_node, data_node.name)
+            self._content[data_node.with_suffix("").name] = Leaf.initialize(data_node.with_suffix(""),
+                                                                            data_node.with_suffix("").name)
 
     def remove_item(self, key: str) -> Node:
         if self._overwrite:
@@ -191,6 +192,38 @@ class Branch(Node):
                 return True
         return False
 
+    @property
+    def branches(self) -> List["Branch"]:
+        return list(filter(lambda content: isinstance(content, Branch),
+                           self._content.values()))
+
+    @property
+    def leafs(self) -> List["Leaf"]:
+        return list(filter(lambda content: isinstance(content, Leaf),
+                           self._content.values()))
+
+    def __eq__(self, other: "Branch") -> bool:
+        if other == None or not isinstance(other, Branch):
+            return False
+        if self._name == other.name:
+            if len(self.keys()) != len(other.keys()):
+                return False
+            for key in self.keys():
+                if key not in other.keys():
+                    return False
+
+                if self._content[key] != other[key]:
+                    return False
+        else:
+            return False
+        return True
+
+    def __str__(self) -> str:
+        return "<branch: {:s} child_branches: {:d} child_leafs: {:d}>".format(self._name,
+                                                                              len(self.branches),
+                                                                              len(self.leafs))
+
+
 class StructuredDataSet(Branch):
     """
     StructuredDataSet the base class of Branch
@@ -228,17 +261,14 @@ class StructuredDataSet(Branch):
 
     @staticmethod
     def read(path: Path) -> "StructuredDataSet":
-        """
-        TODO fix bug
-        """
         # load all the files
         files = list(path.glob("*"))
 
         # branches
-        branches = filter(lambda x: x.suffix != ".leaf", files)
+        branches = list(filter(lambda x: x.suffix != ".leaf", files))
 
         # data
-        data = filter(lambda x: x.suffix  == ".leaf", files)
+        data = list(filter(lambda x: x.suffix  == ".leaf", files))
         content = {}
         for branch in branches:
             content[branch.name] = Branch(path, 
@@ -247,7 +277,7 @@ class StructuredDataSet(Branch):
             content[branch.name].read()
 
         for data_node in data:
-            content[data_node.name] = Leaf.initialize(path,
+            content[data_node.with_suffix("").name] = Leaf.initialize(path.with_suffix(""),
                                                       data_node.name)
 
         return StructuredDataSet(path.parent, path.stem, content)
@@ -336,6 +366,10 @@ class Leaf(Node):
     def _write_child(self) -> None:
         raise NotImplementedError("Must override the write function")
 
+    @abc.abstractmethod
+    def __eq__(self, other: "Leaf"):
+        raise NotImplementedError("Must override the equal function")
+
     @abc.abstractproperty
     def path(self) -> Path:
         raise NotImplementedError("Path not implemented")
@@ -343,8 +377,10 @@ class Leaf(Node):
     @staticmethod
     def initialize(path: Path,
                    name: str) -> "Leaf":
+        name = name.replace(".leaf", "")
+
         # read all the non-hidden files
-        content = list(path.glob("./*"))
+        content = list(path.with_suffix(".leaf").glob("./*"))
         content = list(filter(lambda x: not x.stem.startswith("."), content))
 
         if len(content) > 1:
@@ -353,7 +389,6 @@ class Leaf(Node):
 
         if content[0].suffix == ".npy":
             return LeafNumpy(path.parent, name.replace(".leaf", ""))
-
 
 class LeafPandas(Leaf):
     """
@@ -408,3 +443,10 @@ class LeafNumpy(Leaf):
     def path(self) -> Path:
         return self.leaf_path / "data.npy"
 
+
+    def __eq__(self, other: "Leaf") -> bool:
+        if isinstance(other, LeafNumpy):
+            if self._name == other.name:
+                if numpy.array_equal(self.data, other.data):
+                    return True
+        return False

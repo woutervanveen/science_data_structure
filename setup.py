@@ -5,11 +5,12 @@ with open("README.md", "r") as readme_file:
 
 
 setup(
-    name="science_data_structure-pkg-wgvanveen",
+    name="science_data_structure",
     version="0.0.1",
     author="Wouter van Veen",
     description="Structure for large data-sets in science",
     long_description=long_description,
+    long_description_content_type='text/markdown',
     url="https://github.com/woutervanveen/science_data_structure",
     packages=find_packages(),
     classifiers=[

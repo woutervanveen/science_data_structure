@@ -78,61 +78,7 @@ class TestStructuredDataset(unittest.TestCase):
             self.fail("dataset.add_branch raised a FileExistsError")
 
     def test_auto_branching(self) -> None:
-        data_set = structures.StructuredDataSet(self._test_path,
-                                                "test_auto_branching",
-                                                {},
-                                                enable_auto_branching=True)
-        branch_name_1 = "auto_branched"
-        branch_name_2 = "not_auto_branched"
-        try:
-            branch = data_set[branch_name_1]
-            self.assertNotEqual(branch, None)
-
-            data_set.write(exist_ok=True)
-            self.assertTrue(branch.path.exists())
-        except KeyError:
-            self.fail("Did not auto-branch")
-
-
-        # now disable autobranching
-        data_set.enable_auto_branching = False
-        with self.assertRaises(KeyError):
-            data_set[branch_name_2]
-        data_set.write(exist_ok=True)
-        # check if the second branch exists
-        self.assertFalse((data_set.path / branch_name_2).exists())
-
-        # test auto branching with variables
-        data_set.enable_auto_branching = True
-        x = numpy.linspace(0, 100, 1000)
-        data_set[branch_name_1]["x"] = x
-        try:
-            data_set[branch_name_1]["x"]
-        except KeyError:
-            self.fail("auto branching failed")
-
-        # try to overwrite the value in x
-        with self.assertRaises(FileExistsError):
-            data_set[branch_name_1]["x"] = x
-
-
-        # disable auto branching
-        data_set.enable_auto_branching = False
-        with self.assertRaises(PermissionError):
-            data_set[branch_name_1]["x_2"] = x
-
-        with self.assertRaises(KeyError):
-            data_set[branch_name_1]["x_2"]
-
-        # test nested auto branching
-        data_set.enable_auto_branching = True
-        branch_branched = data_set[branch_name_1][branch_name_1][branch_name_1]
-        branch_nested_path = branch_branched.path
-        self.assertTrue((data_set.path / branch_name_1 / branch_name_1 / branch_name_1) == branch_nested_path)
-
-        data_set.write(exist_ok=True)
-        self.assertTrue(branch_nested_path.exists())
-
+        pass
 
 
     def test_kill(self) -> None:
@@ -156,9 +102,7 @@ class TestStructuredDataset(unittest.TestCase):
         # toggle overwrite
         data_set.overwrite = True
         data_set["branch_2"] = None
-        data_set.enable_auto_branching = False  
-        with self.assertRaises(KeyError):
-            data_set["branch_2"]
+        self.assertFalse("branch_2" in data_set.keys())
 
         data_set.write(exist_ok=True, hard=True)
 

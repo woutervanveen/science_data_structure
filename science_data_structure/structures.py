@@ -28,15 +28,12 @@ class Branch(Node):
                  parent_path: Path,
                  name: str,
                  content: Dict[str, Node],
-                 enable_auto_branching: bool = True,
                  overwrite: bool = False) -> None:
         self._parent_path = parent_path  # type: Path
         self._name = name  # type: str
         self._content = content  # type: Dict[str, Node] 
-        self._enable_auto_branching = enable_auto_branching
         self._overwrite = overwrite
         self._kill = []  # type: List[Node]
-
 
     @property
     def name(self) -> str:
@@ -102,12 +99,7 @@ class Branch(Node):
         try:
             return self._content[name]
         except KeyError:
-            # the variable does not exist
-            if self._enable_auto_branching:
-                # create a new branch based on the name provided
-                return self.add_branch(name)
-
-        raise KeyError
+            return self.add_branch(name)
 
     def __setitem__(self, key: str, item) -> None:
         """
@@ -116,11 +108,13 @@ class Branch(Node):
         TODO handle the deletion of the node when it is overwritten by another node
         """
         if item is None:
-            if self._enable_auto_branching:
+            if self._overwrite:
                 self.remove_item(key)
+            else:
+                raise PermissionError
         elif not isinstance(item, Node):
             if isinstance(item, numpy.ndarray):
-                if self._enable_auto_branching and key not in self._content:
+                if key not in self._content:
                     self._content[key] = LeafNumpy(self.path,
                                                    key)
                     self._content[key].data = item
@@ -134,7 +128,7 @@ class Branch(Node):
                 else:
                     raise FileExistsError
         else:
-            if self._enable_auto_branching and key not in self._content:
+            if key not in self._content:
                 self._content[key] = Branch(self.path,
                                           key)
             elif key in self._content and self._overwrite:
@@ -145,18 +139,6 @@ class Branch(Node):
                 raise PermissionError
             else:
                 raise FileExistsError
-
-    @property
-    def enable_auto_branching(self) -> bool:
-        return self._enable_auto_branching
-
-    @enable_auto_branching.setter
-    def enable_auto_branching(self, enable_auto_branching) -> None:
-        self._enable_auto_branching = enable_auto_branching
-
-        for key in self._content.keys():
-            if isinstance(self._content[key], Branch):
-                self._content[key].enable_auto_branching = enable_auto_branching
 
     @property
     def overwrite(self) -> bool:
@@ -232,11 +214,9 @@ class StructuredDataSet(Branch):
                  path: Path,
                  name: str,
                  content: Dict[str, Node],
-                 enable_auto_branching: bool = True,
                  overwrite: bool = False) -> None:
         super().__init__(path , "{:s}.struct".format(name),
                          content,
-                         enable_auto_branching = enable_auto_branching,
                          overwrite = overwrite)
 
     def write(self, 

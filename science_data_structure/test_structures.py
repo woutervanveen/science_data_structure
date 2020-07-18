@@ -80,7 +80,6 @@ class TestStructuredDataset(unittest.TestCase):
     def test_auto_branching(self) -> None:
         pass
 
-
     def test_kill(self) -> None:
         data_set = structures.StructuredDataSet(self._test_path,
                                                 "test_kill",
@@ -95,7 +94,6 @@ class TestStructuredDataset(unittest.TestCase):
             self.add_data_in_last_branch(branch, x)
         data_set.write(exist_ok=True)
 
-        # remove some branches
         with self.assertRaises(PermissionError):
             data_set["branch_2"] = None
 
@@ -120,6 +118,7 @@ class TestStructuredDataset(unittest.TestCase):
         data_set.remove()
         self.assertFalse(path.exists())
 
+<<<<<<< HEAD
     def test_read(self) -> None:
         data_set = structures.StructuredDataSet(self._test_path,
                                                 "read_write",
@@ -131,6 +130,13 @@ class TestStructuredDataset(unittest.TestCase):
         for i_branch in range(n_branches):
             branch = data_set["branch_{:d}".format(i_branch)]
             self.add_branches_recursive(branch, depth)
+=======
+    def add_leafs_recursive(self, parent_leaf: structures.Leaf, depth) -> None:
+        if depth > 0:
+            for i_leaf in range(depth):
+                leaf = parent_leaf.add_leaf("leaf_{:d}".format(i_leaf))
+                self.add_leafs_recursive(leaf, depth-1)
+>>>>>>> master
 
             # place a random variable in each branch
             self.add_data_in_all_branches(branch,

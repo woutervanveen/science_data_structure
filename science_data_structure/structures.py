@@ -17,13 +17,16 @@ class Node(abc.ABC):
     @abc.abstractproperty
     def path(self) -> Path:
         pass
-    
+
     @abc.abstractmethod
     def read(self) -> "Node":
         pass
 
 class Branch(Node):
-
+    """
+    Branch of the tree represents a folder holder either
+    more branches, or leafs, or a mix.
+    """
     def __init__(self,
                  parent_path: Path,
                  name: str,
@@ -31,18 +34,12 @@ class Branch(Node):
                  overwrite: bool = False) -> None:
         self._parent_path = parent_path  # type: Path
         self._name = name  # type: str
-        self._content = content  # type: Dict[str, Node] 
+        self._content = content  # type: Dict[str, Node]
         self._overwrite = overwrite
         self._kill = []  # type: List[Node]
 
-    @property
-    def name(self) -> str:
-        return self._name
 
-    @property
-    def path(self) -> Path:
-        return self._parent_path / self._name
-    
+    # Public functions
     def write(self) -> None:
         os.makedirs(self.path, exist_ok=True)
         for node_name in self._content.keys():
@@ -89,12 +86,33 @@ class Branch(Node):
             self._content[data_node.with_suffix("").name] = Leaf.initialize(data_node.with_suffix(""),
                                                                             data_node.with_suffix("").name)
 
+    def keys(self) -> List[str]:
+        return list(self._content.keys())
+
+    # protected functions
     def _remove_item(self, key: str) -> Node:
         if self._overwrite:
             self._kill += [self._content[key]]
             return self._content.pop(key)
         raise PermissionError
 
+    def _remove(self) -> None:
+        for key in self._content.keys():
+            self._content[key]._remove()
+
+        self._clear_kill()
+
+        self.path.rmdir()
+
+    def _clear_kill(self) -> None:
+        for node in self._kill:
+            node._remove()
+            self._kill.remove(node)
+        for branch in self.branches:
+            branch._clear_kill()
+
+
+    # Overriden functions
     def __getitem__(self, name: str) -> Node:
         try:
             return self._content[name]
@@ -102,11 +120,9 @@ class Branch(Node):
             return self.add_branch(name)
 
     def __setitem__(self, key: str, item) -> None:
-        """
-        TODO check if the key is of value string
-        TODO handle setting branch or node with None
-        TODO handle the deletion of the node when it is overwritten by another node
-        """
+        if not isinstance(key, str):
+            raise KeyError
+
         if item is None:
             if self._overwrite:
                 self._remove_item(key)
@@ -139,52 +155,6 @@ class Branch(Node):
             else:
                 raise FileExistsError
 
-    @property
-    def overwrite(self) -> bool:
-        return self._overwrite
-
-    @overwrite.setter
-    def overwrite(self, overwrite: bool) -> None:
-        self._overwrite = overwrite
-        for key in self._content.keys():
-            self._content[key].overwrite = overwrite
-
-
-    def keys(self) -> List[str]:
-        return list(self._content.keys())
-
-    def _remove(self) -> None:
-        for key in self._content.keys():
-            self._content[key]._remove()
-
-        self._clear_kill()
-
-        self.path.rmdir()
-
-    def _clear_kill(self) -> None:
-        for node in self._kill:
-            node._remove()
-            self._kill.remove(node)
-        for branch in self.branches:
-            branch._clear_kill()
-
-    @property
-    def has_leaves(self) -> bool:
-        for key in self._content.keys():
-            if isinstance(self._content[key], Branch):
-                return True
-        return False
-
-    @property
-    def branches(self) -> List["Branch"]:
-        return list(filter(lambda content: isinstance(content, Branch),
-                           self._content.values()))
-
-    @property
-    def leafs(self) -> List["Leaf"]:
-        return list(filter(lambda content: isinstance(content, Leaf),
-                           self._content.values()))
-
     def __eq__(self, other: "Branch") -> bool:
         if other == None or not isinstance(other, Branch):
             return False
@@ -207,9 +177,49 @@ class Branch(Node):
                                                                               len(self.leafs))
 
 
+    # properties
+    @property
+    def overwrite(self) -> bool:
+        return self._overwrite
+
+    @overwrite.setter
+    def overwrite(self, overwrite: bool) -> None:
+        self._overwrite = overwrite
+        for key in self._content.keys():
+            self._content[key].overwrite = overwrite
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def path(self) -> Path:
+        return self._parent_path / self._name
+
+    @property
+    def has_leaves(self) -> bool:
+        for key in self._content.keys():
+            if isinstance(self._content[key], Branch):
+                return True
+        return False
+
+    @property
+    def branches(self) -> List["Branch"]:
+        return list(filter(lambda content: isinstance(content, Branch),
+                           self._content.values()))
+
+    @property
+    def leafs(self) -> List["Leaf"]:
+        return list(filter(lambda content: isinstance(content, Leaf),
+                           self._content.values()))
+
+
+
 class StructuredDataSet(Branch):
     """
-    StructuredDataSet the base class of Branch
+    StructuredDataSet based on branch,
+    only some functions are overridden for special
+    functions.
     """
     def __init__(self,
                  path: Path,
@@ -283,7 +293,7 @@ class Leaf(Node):
         self._is_read = False  # type: bool
         self._is_changed = False  # type: bool
 
-    # functions
+    # public functions
     def write(self) -> None:
         if not self.leaf_path.exists():
             self.leaf_path.mkdir()
@@ -351,6 +361,7 @@ class Leaf(Node):
     def path(self) -> Path:
         raise NotImplementedError("Path not implemented")
 
+    # static methods
     @staticmethod
     def initialize(path: Path,
                    name: str) -> "Leaf":
@@ -384,10 +395,12 @@ class LeafNumpy(Leaf):
 
         self._data = None  # type: numpy.ndarray
 
-    # Methods overridden
+    # public functions
     def read(self) -> numpy.ndarray:
         self._data = numpy.load(self.path)
+        self._is_read = True
 
+    # protected functions
     def _get_data(self):
         if not self._is_read:
             self.read()
@@ -408,18 +421,18 @@ class LeafNumpy(Leaf):
         """
         Create a folder with the .leaf extension,
         place the numpy array inside,
-        add meta data in the .leaf.json file
-        TODO -> if changed? 
         """
         if self._is_changed:
             if not self.path.exists() or self._overwrite:
                 numpy.save(self.path, self._data)
 
+    # properties
     @property
     def path(self) -> Path:
         return self.leaf_path / "data.npy"
 
 
+    # overridden functions
     def __eq__(self, other: "Leaf") -> bool:
         if isinstance(other, LeafNumpy):
             if self._name == other.name:

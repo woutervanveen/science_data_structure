@@ -1,5 +1,5 @@
+![PyPI](https://img.shields.io/pypi/v/science-data-structure)
 
-![PyPI - Downloads](https://img.shields.io/pypi/dm/science-data-structure)
 # Science data structure
 
 This library makes it straight forward to make a tree folder structure for large data-sets. For now it supports numpy arrays only, but I have plans to implement pandas, csv, tab-separated and excel soon. 
@@ -10,7 +10,7 @@ The idea behind the library is to make a data-set browse-able with a normal file
 ## Install
 Install through pip
 ```
-pip install science_data_structure
+pip install science-data-structure
 ```
 
 ## Examples

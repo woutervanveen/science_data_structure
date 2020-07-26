@@ -2,6 +2,7 @@ import unittest
 import structures
 import pathlib
 import numpy
+import descriptions
 
 
 class TestStructuredDataset(unittest.TestCase):
@@ -10,9 +11,8 @@ class TestStructuredDataset(unittest.TestCase):
     """
 
     def setUp(self):
-        self._test_path = pathlib.Path("../test")
+        self._test_path = pathlib.Path("../test_structures")
         self._test_path.mkdir(exist_ok=True)
-
 
     def test_data_formats(self) -> None:
         data_set = structures.StructuredDataSet(self._test_path,
@@ -134,13 +134,12 @@ class TestStructuredDataset(unittest.TestCase):
         self.assertFalse(path_x.exists())
 
         path_y = branch["y"].path
-
         branch["y"] = structures.Branch(branch.path, "y", {})
 
         data_set.write(exist_ok=True)
 
         self.assertFalse(path_y.exists())
-    
+
     def test_read(self) -> None:
         data_set = structures.StructuredDataSet(self._test_path,
                                                 "read_write",
@@ -152,12 +151,6 @@ class TestStructuredDataset(unittest.TestCase):
         for i_branch in range(n_branches):
             branch = data_set["branch_{:d}".format(i_branch)]
             self.add_branches_recursive(branch, depth)
-
-    def add_leafs_recursive(self, parent_leaf: structures.Leaf, depth) -> None:
-        if depth > 0:
-            for i_leaf in range(depth):
-                leaf = parent_leaf.add_leaf("leaf_{:d}".format(i_leaf))
-                self.add_leafs_recursive(leaf, depth-1)
 
             # place a random variable in each branch
             self.add_data_in_all_branches(branch,
@@ -174,6 +167,13 @@ class TestStructuredDataset(unittest.TestCase):
         data_set_read.overwrite = True
         data_set_read["branch_0"] = None
         self.assertNotEqual(data_set_read, data_set)
+
+
+    def add_leafs_recursive(self, parent_leaf: structures.Leaf, depth) -> None:
+        if depth > 0:
+            for i_leaf in range(depth):
+                leaf = parent_leaf.add_leaf("leaf_{:d}".format(i_leaf))
+                self.add_leafs_recursive(leaf, depth-1)
 
     def add_branches_recursive(self,
                                parent_branch: structures.Branch,
@@ -209,6 +209,7 @@ class TestStructuredDataset(unittest.TestCase):
                 data_set.overwrite = True
                 data_set.remove()
         self._test_path.rmdir()
+
 
 if __name__ == "__main__":
     unittest.main()

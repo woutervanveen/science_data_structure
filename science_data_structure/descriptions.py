@@ -36,6 +36,10 @@ class Author(JSONObject):
         content = list(json_data.items())
         return dict(map(lambda item: (int(item[0]), Author(item[1]["id"], item[1]["name"])), content))
 
+    @property
+    def author_id(self) -> int:
+        return self._author_id
+
 
 class Meta(JSONObject):
 
@@ -88,3 +92,9 @@ class Meta(JSONObject):
 
     def remove(self) -> None:
         self._path.unlink()
+
+    def add_author(self, author: Author) -> None:
+        if author.author_id in self._authors:
+            raise KeyError
+
+        self._authors[author.author_id] = author

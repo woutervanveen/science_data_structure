@@ -22,6 +22,7 @@ class Node(abc.ABC):
     def read(self) -> "Node":
         pass
 
+
 class Branch(Node):
     """
     Branch of the tree represents a folder holder either
@@ -37,7 +38,6 @@ class Branch(Node):
         self._content = content  # type: Dict[str, Node]
         self._overwrite = overwrite
         self._kill = []  # type: List[Node]
-
 
     # Public functions
     def write(self) -> None:
@@ -71,11 +71,9 @@ class Branch(Node):
         files = list(self.path.glob("*"))
 
         # branchs
-        branchs = filter(lambda x: x.suffix != ".leaf", files)
-
+        branchs = filter(lambda x: x.suffix != ".leaf" and not x.name.startswith("."), files)
         # data
-        data = filter(lambda x: x.suffix == ".leaf", files)
-
+        data = filter(lambda x: x.suffix == ".leaf" and not x.name.startswith("."), files)
         for branch in branchs:
             self._content[branch.name] = Branch(self.path, 
                                                 branch.name,
@@ -101,7 +99,6 @@ class Branch(Node):
             self._content[key]._remove()
 
         self._clear_kill()
-
         self.path.rmdir()
 
     def _clear_kill(self) -> None:
@@ -110,7 +107,6 @@ class Branch(Node):
             self._kill.remove(node)
         for branch in self.branches:
             branch._clear_kill()
-
 
     # Overriden functions
     def __getitem__(self, name: str) -> Node:
@@ -226,9 +222,10 @@ class StructuredDataSet(Branch):
                  name: str,
                  content: Dict[str, Node],
                  overwrite: bool = False) -> None:
-        super().__init__(path , "{:s}.struct".format(name),
+        super().__init__(path,
+                         "{:s}.struct".format(name),
                          content,
-                         overwrite = overwrite)
+                         overwrite=overwrite)
 
     def write(self, 
               exist_ok: bool =False) -> None:
@@ -252,16 +249,17 @@ class StructuredDataSet(Branch):
             self._remove()
         else:
             raise PermissionError
+
     @staticmethod
     def read(path: Path) -> "StructuredDataSet":
         # load all the files
         files = list(path.glob("*"))
 
         # branches
-        branches = list(filter(lambda x: x.suffix != ".leaf", files))
+        branches = list(filter(lambda x: x.suffix != ".leaf" and not x.name.startswith("."), files))
 
         # data
-        data = list(filter(lambda x: x.suffix  == ".leaf", files))
+        data = list(filter(lambda x: x.suffix  == ".leaf" and not x.name.startswith("."), files))
         content = {}
         for branch in branches:
             content[branch.name] = Branch(path, 
@@ -275,7 +273,7 @@ class StructuredDataSet(Branch):
 
         return StructuredDataSet(path.parent, path.stem, content)
 
-
+    
 class Leaf(Node):
     """
     A leaf is a folder containing a single data-format, and description of the variable
@@ -289,7 +287,6 @@ class Leaf(Node):
         self._overwrite = overwrite  # type: bool
 
         # class specific
-        self._data = None  # type: numpy.ndarray
         self._is_read = False  # type: bool
         self._is_changed = False  # type: bool
 
@@ -313,14 +310,6 @@ class Leaf(Node):
         return self._name
 
     @property
-    def data(self) -> numpy.ndarray:
-        return self._get_data()
-
-    @data.setter
-    def data(self, data) -> None:
-        self._set_data(data)
-
-    @property
     def leaf_path(self) -> Path:
         return self._parent_path / "{:s}.leaf".format(self._name)
 
@@ -332,6 +321,14 @@ class Leaf(Node):
     def overwrite(self, overwrite: bool) -> None:
         self._overwrite = overwrite
 
+    @property
+    def data(self):
+        return self._get_data()
+
+    @data.setter
+    def data(self, data):
+        self._set_data(data)
+
     # abstract methods
     @abc.abstractmethod
     def read(self) -> numpy.ndarray:
@@ -342,7 +339,7 @@ class Leaf(Node):
         raise NotImplementedError("Must override the _get_data function")
 
     @abc.abstractmethod
-    def _set_data(self):
+    def _set_data(self, data):
         raise NotImplementedError("Must override the _set_data function")
 
     @abc.abstractmethod
@@ -374,8 +371,12 @@ class Leaf(Node):
         if len(content) > 1:
             raise FileNotFoundError("To many files in the path: {:s}".format(str(path)))
 
-        if content[0].suffix == ".npy":
-            return LeafNumpy(path.parent, name.replace(".leaf", ""))
+        if len(content) > 0:
+            if content[0].suffix == ".npy":
+                return LeafNumpy(path.parent, name.replace(".leaf", ""))
+        else:
+            raise FileNotFoundError("The leaf does not exist {:s} {:s}".format(str(path), name))
+
 
 class LeafPandas(Leaf):
     """
@@ -386,12 +387,18 @@ class LeafPandas(Leaf):
         super().__init__(parent_path,
                          name)
 
+
 class LeafNumpy(Leaf):
     """
     Class to hold data with the base numpy
     """
-    def __init__(self, parent_path: Path, name: str, overwrite: bool = False) -> None:
-        super().__init__(parent_path, name, overwrite=overwrite)
+    def __init__(self,
+                 parent_path: Path,
+                 name: str,
+                 overwrite: bool = False) -> None:
+        super().__init__(parent_path,
+                         name,
+                         overwrite=overwrite)
 
         self._data = None  # type: numpy.ndarray
 
@@ -416,6 +423,8 @@ class LeafNumpy(Leaf):
             self.leaf_path.rmdir()
         elif self.path.exists() and not self._overwrite:
             raise PermissionError
+        elif not self.path.exists():
+            raise FileNotFoundError("could not find: {:s}".format(str(self.path)))
 
     def _write_child(self) -> None:
         """
@@ -432,6 +441,7 @@ class LeafNumpy(Leaf):
         return self.leaf_path / "data.npy"
 
 
+
     # overridden functions
     def __eq__(self, other: "Leaf") -> bool:
         if isinstance(other, LeafNumpy):
@@ -442,3 +452,4 @@ class LeafNumpy(Leaf):
 
     def __str__(self) -> str:
         return "<LeafNumpy {:s}>".format(str(self.path))
+

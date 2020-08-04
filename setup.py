@@ -24,7 +24,7 @@ setup(
     python_requires='>=3.8',
     entry_points='''
     [console_scripts]
-    yourscript=scripts.yourscript:cli
+    science_data_structure=science_data_structure.tools.manage:manage
     '''
 )
 

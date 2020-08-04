@@ -1,9 +1,8 @@
 import click
-import os
-import config
+from science_data_structure.tools import config
 from science_data_structure.author import Author
 
-@click.group(name="science-data-structure")
+@click.group()
 def manage():
     pass
 
@@ -25,7 +24,7 @@ def _list():
 def create_author(name: str):
     "Creates an author and saves it to disk"
     config_path = config.default_path() / "config.json"
-    if config_path.exist():
+    if config_path.exists():
         raise FileExistsError("There is already a registered author, please edit the author with the edit command")
     author = Author.create_author(name)
 

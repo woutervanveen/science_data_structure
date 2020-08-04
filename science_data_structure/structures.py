@@ -3,7 +3,6 @@ from typing import Dict, List
 from pathlib import Path
 import os
 import numpy
-from descriptions import Meta, Author
 
 
 class Node(abc.ABC):
@@ -23,10 +22,6 @@ class Node(abc.ABC):
     def read(self) -> "Node":
         pass
 
-    @abc.abstractproperty
-    def meta(self) -> Meta:
-        raise NotImplementedError("Must override the meta class")
-
 
 class Branch(Node):
     """
@@ -44,21 +39,9 @@ class Branch(Node):
         self._overwrite = overwrite
         self._kill = []  # type: List[Node]
 
-        self._meta = self._initialize_meta()
-
-    def _initialize_meta(self) -> Meta:
-        # try to read the meta, otherwise create an empty meta
-        try:
-            meta = Meta.read(self.path / ".meta.json")
-        except FileNotFoundError:
-            meta = Meta(self.path / ".meta.json")
-
-        return meta
-
     # Public functions
     def write(self) -> None:
         os.makedirs(self.path, exist_ok=True)
-        self._meta.write()
         for node_name in self._content.keys():
             self._content[node_name].write()
 
@@ -116,9 +99,6 @@ class Branch(Node):
             self._content[key]._remove()
 
         self._clear_kill()
-
-        self._meta.remove()
-
         self.path.rmdir()
 
     def _clear_kill(self) -> None:
@@ -230,10 +210,6 @@ class Branch(Node):
                            self._content.values()))
 
 
-    @property
-    def meta(self) -> Meta:
-        return self._meta
-
 
 class StructuredDataSet(Branch):
     """
@@ -256,7 +232,6 @@ class StructuredDataSet(Branch):
         if self.path.exists and not exist_ok:
             raise FileExistsError
         self.path.mkdir(exist_ok=True)
-        self._meta.write()
 
         # empty all the kill rings
         for node in self._kill:
@@ -314,21 +289,11 @@ class Leaf(Node):
         # class specific
         self._is_read = False  # type: bool
         self._is_changed = False  # type: bool
-        self._meta = self._initialize_meta()
-
-    def _initialize_meta(self):
-        try:
-            meta = Meta.read(self.leaf_path / ".meta.json")
-        except FileNotFoundError:
-            meta = Meta(self.leaf_path / ".meta.json")
-
-        return meta
 
     # public functions
     def write(self) -> None:
         if not self.leaf_path.exists():
             self.leaf_path.mkdir()
-        self._meta.write()
         self._write_child()
 
     # properties
@@ -355,10 +320,6 @@ class Leaf(Node):
     @overwrite.setter
     def overwrite(self, overwrite: bool) -> None:
         self._overwrite = overwrite
-
-    @property
-    def meta(self) -> Meta:
-        return self._meta
 
     @property
     def data(self):
@@ -440,7 +401,6 @@ class LeafNumpy(Leaf):
                          overwrite=overwrite)
 
         self._data = None  # type: numpy.ndarray
-        self._meta = self._initialize_meta()
 
     # public functions
     def read(self) -> numpy.ndarray:
@@ -460,7 +420,6 @@ class LeafNumpy(Leaf):
     def _remove(self) -> None:
         if self.path.exists() and self._overwrite:
             self.path.unlink()
-            self._meta.remove()
             self.leaf_path.rmdir()
         elif self.path.exists() and not self._overwrite:
             raise PermissionError
@@ -481,10 +440,6 @@ class LeafNumpy(Leaf):
     def path(self) -> Path:
         return self.leaf_path / "data.npy"
 
-
-    @property
-    def author(self) -> Path:
-        return self._author
 
 
     # overridden functions

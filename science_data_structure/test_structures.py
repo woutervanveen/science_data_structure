@@ -2,7 +2,6 @@ import unittest
 import structures
 import pathlib
 import numpy
-import descriptions
 
 
 class TestStructuredDataset(unittest.TestCase):

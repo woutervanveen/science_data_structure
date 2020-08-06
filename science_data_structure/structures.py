@@ -3,6 +3,7 @@ from typing import Dict, List
 from pathlib import Path
 import os
 import numpy
+from science_data_structure.meta import Meta
 
 
 class Node(abc.ABC):
@@ -12,15 +13,19 @@ class Node(abc.ABC):
     """
     @abc.abstractproperty
     def name(self) -> str:
-        pass
+        raise NotImplementedError("Name must be overriden")
 
     @abc.abstractproperty
     def path(self) -> Path:
-        pass
+        raise NotImplementedError("Path must be overridden")
 
     @abc.abstractmethod
     def read(self) -> "Node":
-        pass
+        raise NotImplementedError("read must be overriden")
+
+    @abc.abstractproperty
+    def meta(self):
+        raise NotImplementedError("meta must be overriden")
 
 
 class Branch(Node):
@@ -29,15 +34,15 @@ class Branch(Node):
     more branches, or leafs, or a mix.
     """
     def __init__(self,
-                 parent_path: Path,
+                 parent: Node,
                  name: str,
                  content: Dict[str, Node],
-                 overwrite: bool = False) -> None:
-        self._parent_path = parent_path  # type: Path
+                 meta: Meta) -> None:
+        self._parent = parent  # type: Node
         self._name = name  # type: str
         self._content = content  # type: Dict[str, Node]
-        self._overwrite = overwrite
         self._kill = []  # type: List[Node]
+        self._meta = meta
 
     # Public functions
     def write(self) -> None:
@@ -47,7 +52,7 @@ class Branch(Node):
 
     def add_branch(self,
                  name: str) -> "Branch":
-        if name not in self._content or self._overwrite:
+        if name not in self._content:
             branch = Branch(self.path,
                         name,
                         {})
@@ -58,11 +63,10 @@ class Branch(Node):
     def add_data(self,
                  name: str,
                  data):
-        if name not in self._content or self._overwrite:
+        if name not in self._content:
             if isinstance(data, numpy.ndarray):
                 data_node = LeafNumpy(self.path,
-                                      name,
-                                      overwrite=self._overwrite)
+                                      name)
                 data_node.data = data
                 self._content[name] = data_node
         return self._content[name]
@@ -89,10 +93,8 @@ class Branch(Node):
 
     # protected functions
     def _remove_item(self, key: str) -> Node:
-        if self._overwrite:
-            self._kill += [self._content[key]]
-            return self._content.pop(key)
-        raise PermissionError
+        self._kill += [self._content[key]]
+        return self._content.pop(key)
 
     def _remove(self) -> None:
         for key in self._content.keys():
@@ -120,17 +122,14 @@ class Branch(Node):
             raise KeyError
 
         if item is None:
-            if self._overwrite:
-                self._remove_item(key)
-            else:
-                raise PermissionError
+            self._remove_item(key)
         elif not isinstance(item, Node):
             if isinstance(item, numpy.ndarray):
                 if key not in self._content:
                     self._content[key] = LeafNumpy(self.path,
                                                    key)
                     self._content[key].data = item
-                elif key in self._content and self._overwrite:
+                elif key in self._content:
                     self._kill += [self._content[key]]
                     self._content[key] = Leaf(self.path,
                                               key)
@@ -143,7 +142,7 @@ class Branch(Node):
             if key not in self._content:
                 self._content[key] = Branch(self.path,
                                           key)
-            elif key in self._content and self._overwrite:
+            elif key in self._content:
                 self._kill += [self._content[key]]
                 self._content[key] = item
             elif key not in self._content:
@@ -173,24 +172,13 @@ class Branch(Node):
                                                                               len(self.leafs))
 
 
-    # properties
-    @property
-    def overwrite(self) -> bool:
-        return self._overwrite
-
-    @overwrite.setter
-    def overwrite(self, overwrite: bool) -> None:
-        self._overwrite = overwrite
-        for key in self._content.keys():
-            self._content[key].overwrite = overwrite
-
     @property
     def name(self) -> str:
         return self._name
 
     @property
     def path(self) -> Path:
-        return self._parent_path / self._name
+        return self._parent.path / self._name
 
     @property
     def has_leaves(self) -> bool:
@@ -209,7 +197,9 @@ class Branch(Node):
         return list(filter(lambda content: isinstance(content, Leaf),
                            self._content.values()))
 
-
+    @property
+    def meta(self) -> Meta:
+        return self._meta
 
 class StructuredDataSet(Branch):
     """
@@ -221,17 +211,18 @@ class StructuredDataSet(Branch):
                  path: Path,
                  name: str,
                  content: Dict[str, Node],
-                 overwrite: bool = False) -> None:
-        super().__init__(path,
+                 meta: Meta) -> None:
+        super().__init__(self,
                          "{:s}.struct".format(name),
                          content,
-                         overwrite=overwrite)
-
-    def write(self, 
-              exist_ok: bool =False) -> None:
-        if self.path.exists and not exist_ok:
-            raise FileExistsError
+                         meta)
+        self._path = path
+        
+    def write(self) -> None:
         self.path.mkdir(exist_ok=True)
+        print(self.path)
+        self._meta.write()
+        return  #TODO remove this return
 
         # empty all the kill rings
         for node in self._kill:
@@ -245,10 +236,7 @@ class StructuredDataSet(Branch):
             self._content[node_name].write()
 
     def remove(self):
-        if self._overwrite:
-            self._remove()
-        else:
-            raise PermissionError
+        self._remove()
 
     @staticmethod
     def read(path: Path) -> "StructuredDataSet":
@@ -273,18 +261,33 @@ class StructuredDataSet(Branch):
 
         return StructuredDataSet(path.parent, path.stem, content)
 
-    
+    @property
+    def path(self) -> Path:
+        return self._path / self._name
+
+
+    @staticmethod
+    def create_dataset(path: Path,
+                       name: str,
+                       top_level_meta: Meta) -> "StructuredDataSet":
+        path_tmp = path / "{:s}.struct".format(name)
+        path_meta = path_tmp / ".meta.json"
+        top_level_meta.path = path_meta
+
+        return StructuredDataSet(path,
+                                 name,
+                                 {},
+                                 top_level_meta)
+
 class Leaf(Node):
     """
     A leaf is a folder containing a single data-format, and description of the variable
     """
     def __init__(self, 
-                 parent_path: Path,
-                 name: str,
-                 overwrite: bool = False) -> None:
-        self._parent_path = parent_path  # type: Path
+                 parent: Node,
+                 name: str) -> None:
+        self._parent = parent # type: Node
         self._name = name  # type: str
-        self._overwrite = overwrite  # type: bool
 
         # class specific
         self._is_read = False  # type: bool
@@ -311,15 +314,7 @@ class Leaf(Node):
 
     @property
     def leaf_path(self) -> Path:
-        return self._parent_path / "{:s}.leaf".format(self._name)
-
-    @property
-    def overwrite(self) -> bool:
-        return self._overwrite
-
-    @overwrite.setter
-    def overwrite(self, overwrite: bool) -> None:
-        self._overwrite = overwrite
+        return self._parent.path / "{:s}.leaf".format(self._name)
 
     @property
     def data(self):
@@ -353,10 +348,6 @@ class Leaf(Node):
     @abc.abstractmethod
     def __eq__(self, other: "Leaf"):
         raise NotImplementedError("Must override the equal function")
-
-    @abc.abstractproperty
-    def path(self) -> Path:
-        raise NotImplementedError("Path not implemented")
 
     # static methods
     @staticmethod
@@ -393,12 +384,10 @@ class LeafNumpy(Leaf):
     Class to hold data with the base numpy
     """
     def __init__(self,
-                 parent_path: Path,
-                 name: str,
-                 overwrite: bool = False) -> None:
-        super().__init__(parent_path,
-                         name,
-                         overwrite=overwrite)
+                 parent: Node,
+                 name: str) -> None:
+        super().__init__(parent,
+                         name)
 
         self._data = None  # type: numpy.ndarray
 
@@ -418,10 +407,10 @@ class LeafNumpy(Leaf):
         self._is_changed = True
 
     def _remove(self) -> None:
-        if self.path.exists() and self._overwrite:
+        if self.path.exists():
             self.path.unlink()
             self.leaf_path.rmdir()
-        elif self.path.exists() and not self._overwrite:
+        elif self.path.exists():
             raise PermissionError
         elif not self.path.exists():
             raise FileNotFoundError("could not find: {:s}".format(str(self.path)))
@@ -432,15 +421,13 @@ class LeafNumpy(Leaf):
         place the numpy array inside,
         """
         if self._is_changed:
-            if not self.path.exists() or self._overwrite:
+            if not self.path.exists():
                 numpy.save(self.path, self._data)
 
     # properties
     @property
     def path(self) -> Path:
         return self.leaf_path / "data.npy"
-
-
 
     # overridden functions
     def __eq__(self, other: "Leaf") -> bool:

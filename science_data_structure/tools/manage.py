@@ -1,6 +1,10 @@
 import click
 from science_data_structure.tools import config
 from science_data_structure.author import Author
+from pathlib import  Path
+from science_data_structure.structures import StructuredDataSet
+import os
+
 
 @click.group()
 def manage():
@@ -18,6 +22,18 @@ def edit():
 def _list():
     pass
 
+
+@click.command(name="dataset")
+@click.argument("name")
+def create_dataset(name):
+    path = Path(os.getcwd())
+    if (path / name / ".struct").exists():
+        raise FileExistsError("There is already a dataset in this folder with that name")
+    dataset = StructuredDataSet(path,
+                                name,
+                                {})
+    click.echo(dataset.path)
+    dataset.write()
 
 @click.command(name="author")
 @click.argument("name")
@@ -48,6 +64,7 @@ def list_author():
 
 # Create group
 create.add_command(create_author)
+create.add_command(create_dataset)
 manage.add_command(create)
 
 # Delete group

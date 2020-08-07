@@ -1,8 +1,5 @@
-import json
 from datetime import datetime
 import uuid
-from pathlib import Path
-from science_data_structure.tools import config
 from science_data_structure.core import JSONObject
 
 
@@ -23,7 +20,7 @@ class Author(JSONObject):
         return {
             "id": str(self._id),
             "name": self._name,
-            "created_on": self._created_on.strftime("%Y-%M-%d")
+            "created_on": self._created_on.strftime("%Y-%m-%d")
         }
 
     def __eq__(self, other):
@@ -41,16 +38,19 @@ class Author(JSONObject):
     def name(self, name):
         self._name = name
 
+    @property
+    def created_on(self):
+        return self._create_on
 
     @staticmethod
     def create_author(name: str) -> "Author":
-        return Author(uuid.uuid4().hex,
+        return Author(uuid.uuid4().int,
                       name,
                       datetime.now())
 
     @staticmethod
     def from_dict(content):
-        author_id = hex(int(content["id"], 16))
+        author_id = int(content["id"])
         name = content["name"]
         created_on = datetime.strptime(content["created_on"], "%Y-%M-%d")
 

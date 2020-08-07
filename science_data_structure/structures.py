@@ -47,15 +47,19 @@ class Branch(Node):
     # Public functions
     def write(self) -> None:
         os.makedirs(self.path, exist_ok=True)
+        self._meta.write()
         for node_name in self._content.keys():
             self._content[node_name].write()
 
     def add_branch(self,
-                 name: str) -> "Branch":
+                   name: str) -> "Branch":
+        top_level_meta = self.top_level_meta
+        meta = Meta.create_meta(top_level_meta, self.path / name)
         if name not in self._content:
-            branch = Branch(self.path,
-                        name,
-                        {})
+            branch = Branch(self,
+                            name,
+                            {},
+                            meta)
             self._content[name] = branch
             return  branch
         raise FileExistsError
@@ -63,10 +67,12 @@ class Branch(Node):
     def add_data(self,
                  name: str,
                  data):
+        meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}.leaf".format(name))
         if name not in self._content:
             if isinstance(data, numpy.ndarray):
-                data_node = LeafNumpy(self.path,
-                                      name)
+                data_node = LeafNumpy(self,
+                                      name,
+                                      meta)
                 data_node.data = data
                 self._content[name] = data_node
         return self._content[name]
@@ -120,19 +126,22 @@ class Branch(Node):
     def __setitem__(self, key: str, item) -> None:
         if not isinstance(key, str):
             raise KeyError
+        meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}.leaf".format(key))
 
         if item is None:
             self._remove_item(key)
         elif not isinstance(item, Node):
             if isinstance(item, numpy.ndarray):
                 if key not in self._content:
-                    self._content[key] = LeafNumpy(self.path,
-                                                   key)
+                    self._content[key] = LeafNumpy(self,
+                                                   key,
+                                                   meta)
                     self._content[key].data = item
                 elif key in self._content:
                     self._kill += [self._content[key]]
                     self._content[key] = Leaf(self.path,
-                                              key)
+                                              key,
+                                              meta)
                     self._content[key].data = item
                 elif key not in self._content:
                     raise PermissionError
@@ -141,7 +150,8 @@ class Branch(Node):
         else:
             if key not in self._content:
                 self._content[key] = Branch(self.path,
-                                          key)
+                                            key,
+                                            meta)
             elif key in self._content:
                 self._kill += [self._content[key]]
                 self._content[key] = item
@@ -201,6 +211,14 @@ class Branch(Node):
     def meta(self) -> Meta:
         return self._meta
 
+
+    @property
+    def top_level_meta(self) -> Meta:
+        if isinstance(self, StructuredDataSet):
+            return self.meta
+        return self._parent.top_level_meta
+
+
 class StructuredDataSet(Branch):
     """
     StructuredDataSet based on branch,
@@ -220,10 +238,9 @@ class StructuredDataSet(Branch):
         
     def write(self) -> None:
         self.path.mkdir(exist_ok=True)
-        print(self.path)
         self._meta.write()
-        return  #TODO remove this return
 
+        """
         # empty all the kill rings
         for node in self._kill:
             node._remove()
@@ -231,7 +248,7 @@ class StructuredDataSet(Branch):
 
         for key in self._content.keys():
             self._content[key]._clear_kill()
-
+        """
         for node_name in self._content.keys():
             self._content[node_name].write()
 
@@ -279,15 +296,18 @@ class StructuredDataSet(Branch):
                                  {},
                                  top_level_meta)
 
+
 class Leaf(Node):
     """
     A leaf is a folder containing a single data-format, and description of the variable
     """
     def __init__(self, 
                  parent: Node,
-                 name: str) -> None:
+                 name: str,
+                 meta: Meta) -> None:
         self._parent = parent # type: Node
         self._name = name  # type: str
+        self._meta = meta
 
         # class specific
         self._is_read = False  # type: bool
@@ -323,6 +343,10 @@ class Leaf(Node):
     @data.setter
     def data(self, data):
         self._set_data(data)
+
+    @property
+    def meta(self) -> Meta:
+        return self._meta
 
     # abstract methods
     @abc.abstractmethod
@@ -369,6 +393,11 @@ class Leaf(Node):
             raise FileNotFoundError("The leaf does not exist {:s} {:s}".format(str(path), name))
 
 
+    @property
+    def meta(self) -> Meta:
+        return self._meta
+
+
 class LeafPandas(Leaf):
     """
     Class to hold data concerning the pandas data-frame
@@ -385,9 +414,11 @@ class LeafNumpy(Leaf):
     """
     def __init__(self,
                  parent: Node,
-                 name: str) -> None:
+                 name: str,
+                 meta: Meta) -> None:
         super().__init__(parent,
-                         name)
+                         name,
+                         meta)
 
         self._data = None  # type: numpy.ndarray
 
@@ -420,6 +451,7 @@ class LeafNumpy(Leaf):
         Create a folder with the .leaf extension,
         place the numpy array inside,
         """
+        self._meta.write()
         if self._is_changed:
             if not self.path.exists():
                 numpy.save(self.path, self._data)

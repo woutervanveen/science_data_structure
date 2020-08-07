@@ -1,5 +1,4 @@
 import click
-from science_data_structure.tools import config
 from science_data_structure.author import Author
 from science_data_structure.meta import Meta
 from science_data_structure.tools import files

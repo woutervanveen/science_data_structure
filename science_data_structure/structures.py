@@ -78,20 +78,21 @@ class Branch(Node):
         return self._content[name]
 
     def read(self) -> "Branch":
-        files = list(self.path.glob("*"))
-
+        content = list(self.path.glob("./*"))
+        content = list(filter(lambda x: not x.stem.startswith("."), content))
         # branchs
-        branchs = filter(lambda x: x.suffix != ".leaf" and not x.name.startswith("."), files)
+        branchs = list(filter(lambda x: x.suffix != ".leaf", content))
         # data
-        data = filter(lambda x: x.suffix == ".leaf" and not x.name.startswith("."), files)
+        data = list(filter(lambda x: x.suffix == ".leaf", content))
         for branch in branchs:
-            self._content[branch.name] = Branch(self.path, 
+            self._content[branch.name] = Branch(self,
                                                 branch.name,
-                                            {})
+                                                {},
+                                                Meta.from_json(self.path / branch.name / ".meta.json"))
             self._content[branch.name].read()
 
         for data_node in data:
-            self._content[data_node.with_suffix("").name] = Leaf.initialize(data_node.with_suffix(""),
+            self._content[data_node.with_suffix("").name] = Leaf.initialize(self,
                                                                             data_node.with_suffix("").name)
 
     def keys(self) -> List[str]:
@@ -106,6 +107,7 @@ class Branch(Node):
         for key in self._content.keys():
             self._content[key]._remove()
 
+        self.meta.path.unlink()
         self._clear_kill()
         self.path.rmdir()
 
@@ -126,20 +128,19 @@ class Branch(Node):
     def __setitem__(self, key: str, item) -> None:
         if not isinstance(key, str):
             raise KeyError
-        meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}.leaf".format(key))
-
         if item is None:
             self._remove_item(key)
         elif not isinstance(item, Node):
             if isinstance(item, numpy.ndarray):
                 if key not in self._content:
+                    meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}.leaf".format(key))
                     self._content[key] = LeafNumpy(self,
                                                    key,
                                                    meta)
                     self._content[key].data = item
                 elif key in self._content:
                     self._kill += [self._content[key]]
-                    self._content[key] = Leaf(self.path,
+                    self._content[key] = Leaf(self,
                                               key,
                                               meta)
                     self._content[key].data = item
@@ -149,8 +150,11 @@ class Branch(Node):
                     raise FileExistsError
         else:
             if key not in self._content:
-                self._content[key] = Branch(self.path,
+                meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}".format(key))
+
+                self._content[key] = Branch(self,
                                             key,
+                                            {},
                                             meta)
             elif key in self._content:
                 self._kill += [self._content[key]]
@@ -218,7 +222,7 @@ class Branch(Node):
             return self.meta
         return self._parent.top_level_meta
 
-
+    
 class StructuredDataSet(Branch):
     """
     StructuredDataSet based on branch,
@@ -240,7 +244,6 @@ class StructuredDataSet(Branch):
         self.path.mkdir(exist_ok=True)
         self._meta.write()
 
-        """
         # empty all the kill rings
         for node in self._kill:
             node._remove()
@@ -248,15 +251,23 @@ class StructuredDataSet(Branch):
 
         for key in self._content.keys():
             self._content[key]._clear_kill()
-        """
         for node_name in self._content.keys():
             self._content[node_name].write()
 
     def remove(self):
-        self._remove()
+        for key in self._content.keys():
+            self._content[key]._remove()
+
+        self.meta.path.unlink()
+        self._clear_kill()
+        self.path.rmdir()
+
+
 
     @staticmethod
     def read(path: Path) -> "StructuredDataSet":
+        top_level_meta = Meta.from_json(path / ".meta.json")
+        dataset = StructuredDataSet(path.parent, path.stem, {}, top_level_meta)
         # load all the files
         files = list(path.glob("*"))
 
@@ -265,18 +276,18 @@ class StructuredDataSet(Branch):
 
         # data
         data = list(filter(lambda x: x.suffix  == ".leaf" and not x.name.startswith("."), files))
-        content = {}
         for branch in branches:
-            content[branch.name] = Branch(path, 
-                                      branch.name,
-                                      {})
-            content[branch.name].read()
+            dataset[branch.name] = Branch(dataset, 
+                                          branch.name,
+                                          {},
+                                          Meta.from_json(path / branch.name / ".meta.json"))
+            dataset[branch.name].read()
 
         for data_node in data:
-            content[data_node.with_suffix("").name] = Leaf.initialize(path.with_suffix(""),
-                                                      data_node.name)
+            dataset[data_node.with_suffix("").name] = Leaf.initialize(dataset,
+                                                                      data_node.name)
 
-        return StructuredDataSet(path.parent, path.stem, content)
+        return dataset
 
     @property
     def path(self) -> Path:
@@ -375,22 +386,24 @@ class Leaf(Node):
 
     # static methods
     @staticmethod
-    def initialize(path: Path,
+    def initialize(parent: Node,
                    name: str) -> "Leaf":
         name = name.replace(".leaf", "")
+        leaf_path = (parent.path / name).with_suffix(".leaf")
+        meta = Meta.from_json(leaf_path / ".meta.json")
 
         # read all the non-hidden files
-        content = list(path.with_suffix(".leaf").glob("./*"))
+        content = list(leaf_path.with_suffix(".leaf").glob("./*"))
         content = list(filter(lambda x: not x.stem.startswith("."), content))
 
         if len(content) > 1:
-            raise FileNotFoundError("To many files in the path: {:s}".format(str(path)))
+            raise FileNotFoundError("To many files in the path: {:s}".format(str(leaf_path)))
 
         if len(content) > 0:
             if content[0].suffix == ".npy":
-                return LeafNumpy(path.parent, name.replace(".leaf", ""))
+                return LeafNumpy(parent, name.replace(".leaf", ""), meta)
         else:
-            raise FileNotFoundError("The leaf does not exist {:s} {:s}".format(str(path), name))
+            raise FileNotFoundError("The leaf does not exist {:s} {:s}".format(str(leaf_path), name))
 
 
     @property
@@ -440,9 +453,8 @@ class LeafNumpy(Leaf):
     def _remove(self) -> None:
         if self.path.exists():
             self.path.unlink()
+            self.meta.path.unlink()
             self.leaf_path.rmdir()
-        elif self.path.exists():
-            raise PermissionError
         elif not self.path.exists():
             raise FileNotFoundError("could not find: {:s}".format(str(self.path)))
 

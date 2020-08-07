@@ -6,7 +6,7 @@ from science_data_structure.core import JSONObject
 class Author(JSONObject):
 
     def __init__(self,
-                 author_id: hex,
+                 author_id: int,
                  name: str,
                  created_on: datetime) -> None:
         self._id = author_id

@@ -124,7 +124,6 @@ class TestStructuredDataset(unittest.TestCase):
 
         self.assertFalse(path_x.exists())
 
-
     def test_read(self) -> None:
         # create an empty data-set
         author = Author.create_author("Test_author")

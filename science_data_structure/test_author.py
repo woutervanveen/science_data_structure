@@ -1,6 +1,5 @@
 import unittest
-from science_data_structure.author import Author
-from science_data_structure.tools.config import ConfigFile
+from author import Author
 from pathlib import Path
 import time
 

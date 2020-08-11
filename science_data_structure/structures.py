@@ -138,31 +138,18 @@ class Branch(Node):
                                                    key,
                                                    meta)
                     self._content[key].data = item
-                elif key in self._content:
+                else:
                     self._kill += [self._content[key]]
                     self._content[key] = Leaf(self,
                                               key,
                                               meta)
                     self._content[key].data = item
-                elif key not in self._content:
-                    raise PermissionError
-                else:
-                    raise FileExistsError
         else:
             if key not in self._content:
-                meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}".format(key))
-
-                self._content[key] = Branch(self,
-                                            key,
-                                            {},
-                                            meta)
-            elif key in self._content:
+                self._content[key] = item
+            else:
                 self._kill += [self._content[key]]
                 self._content[key] = item
-            elif key not in self._content:
-                raise PermissionError
-            else:
-                raise FileExistsError
 
     def __eq__(self, other: "Branch") -> bool:
         if other == None or not isinstance(other, Branch):
@@ -239,7 +226,7 @@ class StructuredDataSet(Branch):
                          content,
                          meta)
         self._path = path
-        
+
     def write(self) -> None:
         self.path.mkdir(exist_ok=True)
         self._meta.write()
@@ -250,7 +237,8 @@ class StructuredDataSet(Branch):
             self._kill.remove(node)
 
         for key in self._content.keys():
-            self._content[key]._clear_kill()
+            if isinstance(self._content[key], Branch):
+                self._content[key]._clear_kill()
         for node_name in self._content.keys():
             self._content[node_name].write()
 
@@ -268,14 +256,14 @@ class StructuredDataSet(Branch):
     def read(path: Path) -> "StructuredDataSet":
         top_level_meta = Meta.from_json(path / ".meta.json")
         dataset = StructuredDataSet(path.parent, path.stem, {}, top_level_meta)
-        # load all the files
-        files = list(path.glob("*"))
 
-        # branches
-        branches = list(filter(lambda x: x.suffix != ".leaf" and not x.name.startswith("."), files))
-
+        content = list(path.glob("./*"))
+        content = list(filter(lambda x: not x.stem.startswith("."), content))
+        # branchs
+        branches = list(filter(lambda x: x.suffix != ".leaf", content))
         # data
-        data = list(filter(lambda x: x.suffix  == ".leaf" and not x.name.startswith("."), files))
+        data = list(filter(lambda x: x.suffix == ".leaf", content))
+
         for branch in branches:
             dataset[branch.name] = Branch(dataset, 
                                           branch.name,
@@ -285,7 +273,7 @@ class StructuredDataSet(Branch):
 
         for data_node in data:
             dataset[data_node.with_suffix("").name] = Leaf.initialize(dataset,
-                                                                      data_node.name)
+                                                                      data_node.with_suffix("").name)
 
         return dataset
 
@@ -375,7 +363,7 @@ class Leaf(Node):
     @abc.abstractmethod
     def _remove(self) -> None:
         raise NotImplementedError("Must override the _remove function")
-   
+
     @abc.abstractmethod
     def _write_child(self) -> None:
         raise NotImplementedError("Must override the write function")
@@ -404,11 +392,6 @@ class Leaf(Node):
                 return LeafNumpy(parent, name.replace(".leaf", ""), meta)
         else:
             raise FileNotFoundError("The leaf does not exist {:s} {:s}".format(str(leaf_path), name))
-
-
-    @property
-    def meta(self) -> Meta:
-        return self._meta
 
 
 class LeafPandas(Leaf):

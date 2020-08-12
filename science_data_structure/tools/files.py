@@ -1,5 +1,14 @@
 from pathlib import Path
 from science_data_structure.meta import Meta, FileProperty
+import click
+
+APP_NAME = "science_data_structure"
+
+
+def config_location() -> Path:
+    path = Path(click.get_app_dir(APP_NAME))
+    path.mkdir(exist_ok=True)
+    return path
 
 
 def find_top_level_meta(path: Path):

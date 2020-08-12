@@ -1,8 +1,9 @@
 import click
 from science_data_structure.author import Author
 from science_data_structure.meta import Meta
-from science_data_structure.tools import files
-from pathlib import  Path
+from science_data_structure.config import ConfigManager
+from science_data_structure.tools import files as file_tools
+from pathlib import Path
 from science_data_structure.structures import StructuredDataSet
 import os
 
@@ -19,59 +20,39 @@ def create():
 def edit():
     pass
 
+@click.group(name="global")
+def _global():
+    pass
+
+@click.group(name="create")
+def global_create():
+    pass
+
+@click.group(name="list")
+def global_list():
+    pass
+
 @click.group(name="list")
 def _list():
     pass
 
 @click.command(name="dataset")
 @click.argument("name")
-@click.argument("author")
-def create_dataset(name, author):
+@click.argument("description", required=False)
+def create_dataset(name,
+                   description):
     path = Path(os.getcwd())
     if (path / name / ".struct").exists():
         raise FileExistsError("There is already a dataset in this folder with that name")
 
-    author = Author.create_author(author)
+    author = ConfigManager().default_author
     dataset = StructuredDataSet.create_dataset(path, name, Meta.create_top_level_meta(None, author))
+
+    if description is not None:
+        dataset.meta.description = description
 
     click.echo(dataset.path)
     dataset.write()
-
-@click.command(name="author")
-def create_author():
-    meta = files.find_top_level_meta(Path(os.getcwd()))
-    value = click.prompt("What is the name of the author?")
-    if value != "":
-        # first check if the author name is not already registered
-        for author in meta.authors:
-            if author.name == value:
-                click.echo("This name is already registered in this dataset")
-            else:
-                author = Author.create_author(value)
-                meta.authors.append(author)
-                meta.write()
-
-@click.command(name="author")
-def edit_author():
-    meta = files.find_top_level_meta(Path(os.getcwd()))
-    for i_author, author in enumerate(meta.authors):
-        click.echo("{:d} \t {:s}\n".format(i_author, str(author.name)))
-    value = click.prompt("Which user you want to edit?", type=int)
-    if value >= 0 and value < len(meta.authors):
-        name_new = click.prompt("What is the new name of the author?", type=str)
-        meta.authors[value].name = name_new
-        meta.write()
-    else:
-        click.echo("Please entery a value id from the list")
-    
-
-@click.command(name="author")
-def list_author():
-    meta = files.find_top_level_meta(Path(os.getcwd()))
-    print("In total {:d} authors are registered in this data-set".format(len(meta.authors)))
-    for author in meta.authors:
-        click.echo(str(author))
-
 
 
 @click.command(name="meta")
@@ -79,8 +60,41 @@ def list_meta():
     meta = Meta.from_json(Path(os.getcwd()) / ".meta.json")
     click.echo(str(meta))
 
+@click.command(name="author")
+def list_author():
+    meta = Meta.from_json(Path(os.getcwd()) / ".meta.json")
+    authors = meta.authors
+    authors = list(map(lambda x: str(x), authors))
+    for author in authors:
+        click.echo(author)
+
+@click.command(name="author")
+@click.argument("name", required=False)
+def create_global_author(name):
+    config_manager = ConfigManager()
+
+    if name is None:
+        name = click.prompt("What is the name of the new author?")
+
+    author = Author.create_author(name)
+    config_manager.default_author = author
+    click.echo(config_manager._path)
+    config_manager.write()
+
+@click.command(name="author")
+def list_global_author():
+    config_manager = ConfigManager()
+    click.echo("{:s}".format(str(config_manager.default_author)))
+
+# globals
+global_create.add_command(create_global_author)
+global_list.add_command(list_global_author)
+
+_global.add_command(global_create)
+_global.add_command(global_list)
+manage.add_command(_global)
+
 # Create group
-create.add_command(create_author)
 create.add_command(create_dataset)
 manage.add_command(create)
 
@@ -92,7 +106,6 @@ _list.add_command(list_meta)
 manage.add_command(_list)
 
 # edit group
-edit.add_command(edit_author)
 manage.add_command(edit)
 
 

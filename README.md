@@ -13,20 +13,36 @@ Install through pip
 pip install science-data-structure
 ```
 
+Manual installation
+```
+python setup.py install
+```
 ## Examples
 
 ### Simple data-set
 In this simple example a data-set is created, with a single branch `parabola`. In this branch two "leafs" are added `x` and `y`. At the end of the example the data_set is written to disk.
 
+Before we can create a dataset we need to create a meta file containing an author
+
 
 ```python
 import science_data_structure.structures as structures
+import science_data_structure.authors as authors
 from pathlib import Path
 import numpy
 
+# create author and meta file
+author = authors.Author("Author Name")
+meta = Meta.create_meta
 
-# Initialze an empty data-set
-data_set = structures.StructuredDataSet(Path("./"), "example", {})
+author = Author.create_author("Test_author")
+meta = Meta.create_top_level_meta(None, author)
+
+# initialize the empty data-set
+dataset = structures.StructuredDataSet.create_dataset(Path("./."),
+                                                      "test_set",
+                                                      meta)
+        
 
 # add data to the data-set
 data_set["parabola"]["x"] = numpy.linspace(-2, 2, 100)
@@ -43,37 +59,5 @@ What will happen when a branch or a leaf is overwritten with another leaf or bra
 data_set["parabola"]["x"] = None
 ```
 
-The above code will try to delete the variable `x`, however it will raise a `PermissionError`. This protection method is in place to make sure that data from a data-set is not simple overwritten. The user must explicitly ask to override the branch or leaf. In the case above, a simple solution will be:
+In this case the variable ~x~ stored in the branch ~parabola~ will be deleted upon the first write. 
 
-``` python
-data_set.overwrite = True
-data_set["parabola"]["x"] = None
-data_set.overwrite = False
-
-data_set.write(exists_ok=True)
-```
-
-The last protection in place is the `exist_ok` variable in the `data_set.write()` function. This makes sure to not accidentally override an existing data-set.
-
-### Reading an existing data-set
-Often you want to read a data-set, use it, adapt it, and write the results back to disk. The following script does just that. 
-
-
-```python
-import science_data_structure.structures as structures
-from pathlib import Path
-import numpy
-
-
-# Initialze an empty data-set
-data_set = structures.StructuredDataSet.read(Path("./example.struct"))
-
-a = 2
-b = 4
-data_set["linear"]["x"] = numpy.linspace(-2, 2, 100)
-data_set["linear"]["y"] = data_set["linear"]["x"] * a + b
-
-data_set.write(exists_ok=True)
-```
-
-Note that we again must set the `exists_ok = True`, otherwise the data-set cannot be written to disk. 

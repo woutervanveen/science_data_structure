@@ -16,11 +16,8 @@ class TestStructuredDataset(unittest.TestCase):
         self._test_path.mkdir(exist_ok=True)
 
     def test_dataset_creation(self):
-        author = Author.create_author("Test_author")
-        meta = Meta.create_top_level_meta(None, author)
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "test_simple",
-                                                              meta)
+                                                              "test_simple")
         dataset["x"]["xx"]["x"] = numpy.zeros(shape=(1000, 1000))
 
         dataset.write()
@@ -40,11 +37,8 @@ class TestStructuredDataset(unittest.TestCase):
     def test_writing(self):
         branch_name = "branch_1"
         # create an empty data-set
-        author = Author.create_author("Test_author")
-        meta = Meta.create_top_level_meta(None, author)
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "test_set",
-                                                              meta)
+                                                              "test_set")
         
         dataset.write()
 
@@ -72,11 +66,8 @@ class TestStructuredDataset(unittest.TestCase):
 
     def test_kill(self) -> None:
         # create an empty data-set
-        author = Author.create_author("Test_author")
-        meta = Meta.create_top_level_meta(None, author)
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "test_kill",
-                                                              meta)
+                                                              "test_kill")
  
         x = numpy.linspace(0, 10, 1000)
         # add branches with nested branches and data
@@ -102,15 +93,10 @@ class TestStructuredDataset(unittest.TestCase):
         dataset.remove()
         self.assertFalse(path.exists())
 
-
     def test_read(self) -> None:
         # create an empty data-set
-        author = Author.create_author("Test_author")
-        meta = Meta.create_top_level_meta(None, author)
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "read_write",
-                                                              meta)
- 
+                                                              "read_write")
         # fill up the data-set with random data
         n_branches = 10
         depth = 3

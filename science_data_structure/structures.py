@@ -3,6 +3,7 @@ from typing import Dict, List
 from pathlib import Path
 import os
 from science_data_structure.meta import Meta
+from science_data_structure.config import ConfigManager
 
 
 class Node:
@@ -176,7 +177,9 @@ class StructuredDataSet(Branch):
     @staticmethod
     def create_dataset(path: Path,
                        name: str,
-                       top_level_meta: Meta) -> "StructuredDataSet":
+                       description: str = "") -> "StructuredDataSet":
+        author = ConfigManager().default_author
+        top_level_meta = Meta.create_top_level_meta(None, author, description=description)
         path_tmp = path / "{:s}.struct".format(name)
         path_meta = path_tmp / ".meta.json"
         top_level_meta.path = path_meta

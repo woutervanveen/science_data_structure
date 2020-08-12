@@ -233,7 +233,7 @@ class Leaf(Node):
 
         if len(content) == 0:
             import data_formats
-            return data_formats[content[0].suffix](parent, name.replace(".leaf"), meta)
+            return data_formats.available_extensions[content[0].suffix](parent, name.replace(".leaf"), meta)
         else:
             if len(content) > 1:
                 raise FileNotFoundError("To many files in the leaf")

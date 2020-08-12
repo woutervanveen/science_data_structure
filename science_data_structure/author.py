@@ -14,7 +14,10 @@ class Author(JSONObject):
         self._created_on = created_on
 
     def __str__(self) -> str:
-        return "Author \n id \t\t {:s} \n name \t\t {:s} \n created \t {:s}".format(str(self._id), self._name, self._created_on.strftime("%Y-%M-%d"))
+        line = "id \t\t {:d} \n" .format(self._id)
+        line += "name \t\t {:s} \n".format(self._name)
+        line += "created \t {:s}".format(self._created_on.strftime("%Y-%M-%d"))
+        return line
 
     def __dict__(self):
         return {

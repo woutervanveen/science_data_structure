@@ -21,7 +21,7 @@ class Meta(JSONObject):
 
     def __init__(self,
                  path: Path,
-                 dataset_id: hex,
+                 dataset_id: int,
                  branch_id: int,
                  description: str = "",
                  authors: List[Author] = [],
@@ -36,6 +36,22 @@ class Meta(JSONObject):
 
     def write(self):
         self.path.write_text(self.to_json())
+
+    def __str__(self):
+        line = "meta information \n"
+        line += "dataset id \t {:d} \n".format(self._dataset_id)
+        line += "branch id \t {:d} \n".format(self._branch_id)
+        line += "description \t {:s} \n".format(self._description)
+        line += "\n"
+        line += "authors: \n"
+        for author in self.authors:
+            line += "{:s} \n \n".format(str(author))
+
+        line += "\n"
+        for name in self._additional_properties.keys():
+            line += "{:s}\n".format(str(self._additional_properties[name]))
+
+        return line
 
     def __dict__(self):
         base_dict = {

@@ -2,89 +2,75 @@ import abc
 from typing import Dict, List
 from pathlib import Path
 import os
-import numpy
 from science_data_structure.meta import Meta
 
 
-class Node(abc.ABC):
-    """
-    Abstract class that forms the basic component
-    of the structured data-set
-    """
-    @abc.abstractproperty
-    def name(self) -> str:
-        raise NotImplementedError("Name must be overriden")
+class Node:
 
-    @abc.abstractproperty
+    def __init__(self,
+                 parent: "Node",
+                 meta: Meta,
+                 name: str):
+        self._parent = parent
+        self._meta = meta
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
     def path(self) -> Path:
-        raise NotImplementedError("Path must be overridden")
+        return self._parent.path / self.name
 
     @abc.abstractmethod
-    def read(self) -> "Node":
-        raise NotImplementedError("read must be overriden")
+    def write(self) -> "None":
+        raise NotImplementedError("write functions must be overwritten")
 
-    @abc.abstractproperty
+    @abc.abstractmethod
+    def remove(self) -> "None":
+        raise NotImplementedError("remove function must be overwritten")
+
+    @property
     def meta(self):
-        raise NotImplementedError("meta must be overriden")
+        return self._meta
+
+    @property
+    def top_level_meta(self) -> Meta:
+        if isinstance(self, StructuredDataSet):
+            return self.meta
+        return self._parent.top_level_meta
 
 
 class Branch(Node):
-    """
-    Branch of the tree represents a folder holder either
-    more branches, or leafs, or a mix.
-    """
+
     def __init__(self,
                  parent: Node,
                  name: str,
                  content: Dict[str, Node],
                  meta: Meta) -> None:
-        self._parent = parent  # type: Node
-        self._name = name  # type: str
+        super().__init__(parent, meta, name)
         self._content = content  # type: Dict[str, Node]
         self._kill = []  # type: List[Node]
-        self._meta = meta
 
-    # Public functions
     def write(self) -> None:
         os.makedirs(self.path, exist_ok=True)
         self._meta.write()
         for node_name in self._content.keys():
             self._content[node_name].write()
 
-    def add_branch(self,
-                   name: str) -> "Branch":
-        top_level_meta = self.top_level_meta
-        meta = Meta.create_meta(top_level_meta, self.path / name)
-        if name not in self._content:
-            branch = Branch(self,
-                            name,
-                            {},
-                            meta)
-            self._content[name] = branch
-            return  branch
-        raise FileExistsError
-
-    def add_data(self,
-                 name: str,
-                 data):
-        meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}.leaf".format(name))
-        if name not in self._content:
-            if isinstance(data, numpy.ndarray):
-                data_node = LeafNumpy(self,
-                                      name,
-                                      meta)
-                data_node.data = data
-                self._content[name] = data_node
-        return self._content[name]
+        # empty the kill ring
+        for node_kill in self._kill:
+            node_kill.remove()
+        self._kill = []
 
     def read(self) -> "Branch":
         content = list(self.path.glob("./*"))
         content = list(filter(lambda x: not x.stem.startswith("."), content))
-        # branchs
-        branchs = list(filter(lambda x: x.suffix != ".leaf", content))
-        # data
+        branches = list(filter(lambda x: x.suffix != ".leaf", content))
         data = list(filter(lambda x: x.suffix == ".leaf", content))
-        for branch in branchs:
+
+        for branch in branches:
             self._content[branch.name] = Branch(self,
                                                 branch.name,
                                                 {},
@@ -98,18 +84,18 @@ class Branch(Node):
     def keys(self) -> List[str]:
         return list(self._content.keys())
 
-    # protected functions
-    def _remove_item(self, key: str) -> Node:
-        self._kill += [self._content[key]]
-        return self._content.pop(key)
-
-    def _remove(self) -> None:
+    def remove(self) -> None:
         for key in self._content.keys():
-            self._content[key]._remove()
+            self._content[key].remove()
 
         self.meta.path.unlink()
         self._clear_kill()
         self.path.rmdir()
+
+    # protected functions
+    def _remove_item(self, key: str) -> Node:
+        self._kill += [self._content[key]]
+        return self._content.pop(key)
 
     def _clear_kill(self) -> None:
         for node in self._kill:
@@ -118,12 +104,12 @@ class Branch(Node):
         for branch in self.branches:
             branch._clear_kill()
 
-    # Overriden functions
     def __getitem__(self, name: str) -> Node:
         try:
             return self._content[name]
         except KeyError:
-            return self.add_branch(name)
+            self._content[name] = Branch.create_branch(self, name)
+            return self._content[name]
 
     def __setitem__(self, key: str, item) -> None:
         if not isinstance(key, str):
@@ -131,19 +117,14 @@ class Branch(Node):
         if item is None:
             self._remove_item(key)
         elif not isinstance(item, Node):
-            if isinstance(item, numpy.ndarray):
-                if key not in self._content:
-                    meta = Meta.create_meta(self.top_level_meta, self.path / "{:s}.leaf".format(key))
-                    self._content[key] = LeafNumpy(self,
-                                                   key,
-                                                   meta)
-                    self._content[key].data = item
-                else:
-                    self._kill += [self._content[key]]
-                    self._content[key] = Leaf(self,
-                                              key,
-                                              meta)
-                    self._content[key].data = item
+            if key in self._content:
+                self._kill += [self._content[key]]
+            import data_formats
+            self._content[key] = data_formats.available_types[type(item)](self,
+                                                                          "{:s}.leaf".format(key),
+                                                                          Meta.create_meta(self.top_level_meta,
+                                                                                           self.path / "{:s}.leaf/".format(key)))
+            self._content[key].data = item
         else:
             if key not in self._content:
                 self._content[key] = item
@@ -151,42 +132,9 @@ class Branch(Node):
                 self._kill += [self._content[key]]
                 self._content[key] = item
 
-    def __eq__(self, other: "Branch") -> bool:
-        if other == None or not isinstance(other, Branch):
-            return False
-        if self._name == other.name:
-            if len(self.keys()) != len(other.keys()):
-                return False
-            for key in self.keys():
-                if key not in other.keys():
-                    return False
-
-                if self._content[key] != other[key]:
-                    return False
-        else:
-            return False
-        return True
-
-    def __str__(self) -> str:
-        return "<branch: {:s} child_branches: {:d} child_leafs: {:d}>".format(self._name,
-                                                                              len(self.branches),
-                                                                              len(self.leafs))
-
-
     @property
     def name(self) -> str:
         return self._name
-
-    @property
-    def path(self) -> Path:
-        return self._parent.path / self._name
-
-    @property
-    def has_leaves(self) -> bool:
-        for key in self._content.keys():
-            if isinstance(self._content[key], Branch):
-                return True
-        return False
 
     @property
     def branches(self) -> List["Branch"]:
@@ -198,89 +146,32 @@ class Branch(Node):
         return list(filter(lambda content: isinstance(content, Leaf),
                            self._content.values()))
 
-    @property
-    def meta(self) -> Meta:
-        return self._meta
+    @staticmethod
+    def create_branch(parent: "Branch",
+                      name: str) -> "Branch":
+        return Branch(parent,
+                      name,
+                      {},
+                      Meta.create_meta(parent.top_level_meta,
+                                       parent.path / name))
 
 
-    @property
-    def top_level_meta(self) -> Meta:
-        if isinstance(self, StructuredDataSet):
-            return self.meta
-        return self._parent.top_level_meta
-
-    
 class StructuredDataSet(Branch):
-    """
-    StructuredDataSet based on branch,
-    only some functions are overridden for special
-    functions.
-    """
+
     def __init__(self,
                  path: Path,
                  name: str,
                  content: Dict[str, Node],
                  meta: Meta) -> None:
-        super().__init__(self,
+        super().__init__(None,
                          "{:s}.struct".format(name),
                          content,
                          meta)
         self._path = path
 
-    def write(self) -> None:
-        self.path.mkdir(exist_ok=True)
-        self._meta.write()
-
-        # empty all the kill rings
-        for node in self._kill:
-            node._remove()
-            self._kill.remove(node)
-
-        for key in self._content.keys():
-            if isinstance(self._content[key], Branch):
-                self._content[key]._clear_kill()
-        for node_name in self._content.keys():
-            self._content[node_name].write()
-
-    def remove(self):
-        for key in self._content.keys():
-            self._content[key]._remove()
-
-        self.meta.path.unlink()
-        self._clear_kill()
-        self.path.rmdir()
-
-
-
-    @staticmethod
-    def read(path: Path) -> "StructuredDataSet":
-        top_level_meta = Meta.from_json(path / ".meta.json")
-        dataset = StructuredDataSet(path.parent, path.stem, {}, top_level_meta)
-
-        content = list(path.glob("./*"))
-        content = list(filter(lambda x: not x.stem.startswith("."), content))
-        # branchs
-        branches = list(filter(lambda x: x.suffix != ".leaf", content))
-        # data
-        data = list(filter(lambda x: x.suffix == ".leaf", content))
-
-        for branch in branches:
-            dataset[branch.name] = Branch(dataset, 
-                                          branch.name,
-                                          {},
-                                          Meta.from_json(path / branch.name / ".meta.json"))
-            dataset[branch.name].read()
-
-        for data_node in data:
-            dataset[data_node.with_suffix("").name] = Leaf.initialize(dataset,
-                                                                      data_node.with_suffix("").name)
-
-        return dataset
-
     @property
-    def path(self) -> Path:
+    def path(self):
         return self._path / self._name
-
 
     @staticmethod
     def create_dataset(path: Path,
@@ -297,43 +188,21 @@ class StructuredDataSet(Branch):
 
 
 class Leaf(Node):
-    """
-    A leaf is a folder containing a single data-format, and description of the variable
-    """
+
     def __init__(self, 
                  parent: Node,
                  name: str,
                  meta: Meta) -> None:
-        self._parent = parent # type: Node
-        self._name = name  # type: str
-        self._meta = meta
-
-        # class specific
-        self._is_read = False  # type: bool
-        self._is_changed = False  # type: bool
-
+        super().__init__(parent,
+                         meta,
+                         name)
+      
     # public functions
     def write(self) -> None:
-        if not self.leaf_path.exists():
-            self.leaf_path.mkdir()
+        if not self.path.exists():
+            self.path.mkdir()
+        self.meta.write()
         self._write_child()
-
-    # properties
-    @property
-    def is_read(self) -> bool:
-        return self._is_read
-
-    @property
-    def is_changed(self) -> bool:
-        return self._is_changed
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def leaf_path(self) -> Path:
-        return self._parent.path / "{:s}.leaf".format(self._name)
 
     @property
     def data(self):
@@ -343,15 +212,6 @@ class Leaf(Node):
     def data(self, data):
         self._set_data(data)
 
-    @property
-    def meta(self) -> Meta:
-        return self._meta
-
-    # abstract methods
-    @abc.abstractmethod
-    def read(self) -> numpy.ndarray:
-        raise NotImplementedError("Must override the read leaf read function")
-
     @abc.abstractmethod
     def _get_data(self):
         raise NotImplementedError("Must override the _get_data function")
@@ -360,19 +220,6 @@ class Leaf(Node):
     def _set_data(self, data):
         raise NotImplementedError("Must override the _set_data function")
 
-    @abc.abstractmethod
-    def _remove(self) -> None:
-        raise NotImplementedError("Must override the _remove function")
-
-    @abc.abstractmethod
-    def _write_child(self) -> None:
-        raise NotImplementedError("Must override the write function")
-
-    @abc.abstractmethod
-    def __eq__(self, other: "Leaf"):
-        raise NotImplementedError("Must override the equal function")
-
-    # static methods
     @staticmethod
     def initialize(parent: Node,
                    name: str) -> "Leaf":
@@ -384,86 +231,11 @@ class Leaf(Node):
         content = list(leaf_path.with_suffix(".leaf").glob("./*"))
         content = list(filter(lambda x: not x.stem.startswith("."), content))
 
-        if len(content) > 1:
-            raise FileNotFoundError("To many files in the path: {:s}".format(str(leaf_path)))
-
-        if len(content) > 0:
-            if content[0].suffix == ".npy":
-                return LeafNumpy(parent, name.replace(".leaf", ""), meta)
+        if len(content) == 0:
+            import data_formats
+            return data_formats[content[0].suffix](parent, name.replace(".leaf"), meta)
         else:
-            raise FileNotFoundError("The leaf does not exist {:s} {:s}".format(str(leaf_path), name))
-
-
-class LeafPandas(Leaf):
-    """
-    Class to hold data concerning the pandas data-frame
-    """
-    def __init__(parent_path: Path,
-                 name: str) -> None:
-        super().__init__(parent_path,
-                         name)
-
-
-class LeafNumpy(Leaf):
-    """
-    Class to hold data with the base numpy
-    """
-    def __init__(self,
-                 parent: Node,
-                 name: str,
-                 meta: Meta) -> None:
-        super().__init__(parent,
-                         name,
-                         meta)
-
-        self._data = None  # type: numpy.ndarray
-
-    # public functions
-    def read(self) -> numpy.ndarray:
-        self._data = numpy.load(self.path)
-        self._is_read = True
-
-    # protected functions
-    def _get_data(self):
-        if not self._is_read:
-            self.read()
-        return self._data
-
-    def _set_data(self, data: numpy.ndarray) -> None:
-        self._data = data
-        self._is_changed = True
-
-    def _remove(self) -> None:
-        if self.path.exists():
-            self.path.unlink()
-            self.meta.path.unlink()
-            self.leaf_path.rmdir()
-        elif not self.path.exists():
-            raise FileNotFoundError("could not find: {:s}".format(str(self.path)))
-
-    def _write_child(self) -> None:
-        """
-        Create a folder with the .leaf extension,
-        place the numpy array inside,
-        """
-        self._meta.write()
-        if self._is_changed:
-            if not self.path.exists():
-                numpy.save(self.path, self._data)
-
-    # properties
-    @property
-    def path(self) -> Path:
-        return self.leaf_path / "data.npy"
-
-    # overridden functions
-    def __eq__(self, other: "Leaf") -> bool:
-        if isinstance(other, LeafNumpy):
-            if self._name == other.name:
-                if numpy.array_equal(self.data, other.data):
-                    return True
-        return False
-
-    def __str__(self) -> str:
-        return "<LeafNumpy {:s}>".format(str(self.path))
-
+            if len(content) > 1:
+                raise FileNotFoundError("To many files in the leaf")
+            else:
+                raise FileNotFoundError("The leaf does not exist {:s} {:s}".format(str(leaf_path), name))

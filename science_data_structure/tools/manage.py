@@ -72,6 +72,13 @@ def list_author():
     for author in meta.authors:
         click.echo(str(author))
 
+
+
+@click.command(name="meta")
+def list_meta():
+    meta = Meta.from_json(Path(os.getcwd()) / ".meta.json")
+    click.echo(str(meta))
+
 # Create group
 create.add_command(create_author)
 create.add_command(create_dataset)
@@ -81,6 +88,7 @@ manage.add_command(create)
 
 # List group
 _list.add_command(list_author)
+_list.add_command(list_meta)
 manage.add_command(_list)
 
 # edit group

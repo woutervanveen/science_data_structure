@@ -1,5 +1,6 @@
 ![PyPI](https://img.shields.io/pypi/v/science-data-structure)
 ![PyPI](https://img.shields.io/pypi/dm/science-data-structure)
+![GitHub last commit](https://img.shields.io/github/last-commit/woutervanveen/science_data_structure)
 # Science data structure
 
 This library makes it straight forward to make a tree folder structure for large data-sets. For now it supports numpy arrays only, but I have plans to implement pandas, csv, tab-separated and excel soon. 

@@ -1,11 +1,13 @@
 from pathlib import Path
 from typing import List
-from science_data_structure.author import Author
-from science_data_structure.core import JSONObject
+from author import Author
+from core import JSONObject
+from logger import LogEntry
 import uuid
 import json
 from typing import Dict
 import abc
+from datetime import datetime
 
 
 class NodeProperty(JSONObject):
@@ -25,13 +27,14 @@ class Meta(JSONObject):
                  branch_id: int,
                  description: str = "",
                  authors: List[Author] = [],
+                 log: Dict[int, LogEntry] = {},
                  additional_properties: Dict[str, NodeProperty] = {}):
         self._path = path
         self._dataset_id = dataset_id
         self._branch_id = branch_id
         self._description = description
         self._authors = authors
-
+        self._log = log
         self._additional_properties = additional_properties
 
     def write(self):
@@ -58,7 +61,8 @@ class Meta(JSONObject):
             "dataset_id": self._dataset_id,
             "branch_id": self._branch_id,
             "authors": self._authors,
-            "description": self._description
+            "description": self._description,
+            "log": self._log
         }
         for property_name in self._additional_properties.keys():
             base_dict[property_name] = self._additional_properties[property_name].__dict__()
@@ -131,6 +135,9 @@ class Meta(JSONObject):
 
     def __getitem__(self, name: str) -> NodeProperty:
         return self._additional_properties[name]
+
+    def add_log_entry(self, log_entry):
+        self._log[log_entry.log_id] = log_entry
 
 
 class FileProperty(NodeProperty):

@@ -1,5 +1,4 @@
 from pathlib import Path
-from science_data_structure.meta import Meta, FileProperty
 import click
 
 APP_NAME = "science_data_structure"
@@ -12,6 +11,8 @@ def config_location() -> Path:
 
 
 def find_top_level_meta(path: Path):
+    from science_data_structure.meta import Meta
+
     path = path.absolute()
 
     if (path / ".meta.json").exists():
@@ -41,6 +42,7 @@ def set_file_properties(path: Path, dig: bool = True) -> int:
     Compute the size of the current branch, including all the subbranches
     The meta files of the subbranches is also updated
     """
+    from science_data_structure.meta import Meta, FileProperty
     meta = Meta.from_json(path / ".meta.json")
     
     folder_size = path.stat().st_size

@@ -1,6 +1,6 @@
 import unittest
-from science_data_structure.tools import manage
-from science_data_structure.meta import Meta
+from tools import manage
+from meta import Meta
 from click.testing import CliRunner
 from pathlib import Path
 

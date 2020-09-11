@@ -6,7 +6,7 @@ with open("README.md", "r") as readme_file:
 
 setup(
     name="science_data_structure",
-    version="0.0.3",
+    version="0.0.4",
     author="Wouter van Veen",
     description="Structure for large data-sets in science",
     long_description=long_description,

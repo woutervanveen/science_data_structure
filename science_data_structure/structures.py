@@ -2,8 +2,10 @@ import abc
 from typing import Dict, List
 from pathlib import Path
 import os
-from science_data_structure.meta import Meta
-from science_data_structure.config import ConfigManager
+from meta import Meta
+from config import ConfigManager
+import logger as logger
+from author import Author
 
 
 class Node:
@@ -54,6 +56,7 @@ class Branch(Node):
         self._content = content  # type: Dict[str, Node]
         self._kill = []  # type: List[Node]
 
+    @logger.logger
     def write(self) -> None:
         os.makedirs(self.path, exist_ok=True)
         self._meta.write()
@@ -177,8 +180,8 @@ class StructuredDataSet(Branch):
     @staticmethod
     def create_dataset(path: Path,
                        name: str,
+                       author: Author,
                        description: str = "") -> "StructuredDataSet":
-        author = ConfigManager().default_author
         top_level_meta = Meta.create_top_level_meta(None, author, description=description)
         path_tmp = path / "{:s}.struct".format(name)
         path_meta = path_tmp / ".meta.json"

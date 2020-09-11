@@ -4,6 +4,7 @@ import pathlib
 import numpy
 from meta import Meta
 from author import Author
+from config import ConfigManager
 
 
 class TestStructuredDataset(unittest.TestCase):
@@ -14,10 +15,14 @@ class TestStructuredDataset(unittest.TestCase):
     def setUp(self):
         self._test_path = pathlib.Path("../test_structures")
         self._test_path.mkdir(exist_ok=True)
+        self._config_manager = ConfigManager()
+        self._author = self._config_manager.default_author
+
 
     def test_dataset_creation(self):
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "test_simple")
+                                                              "test_simple", 
+                                                              self._author)
         dataset["x"]["xx"]["x"] = numpy.zeros(shape=(1000, 1000))
 
         dataset.write()
@@ -38,7 +43,8 @@ class TestStructuredDataset(unittest.TestCase):
         branch_name = "branch_1"
         # create an empty data-set
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "test_set")
+                                                              "test_set", 
+                                                              self._author)
         
         dataset.write()
 
@@ -67,7 +73,8 @@ class TestStructuredDataset(unittest.TestCase):
     def test_kill(self) -> None:
         # create an empty data-set
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "test_kill")
+                                                              "test_kill",
+                                                              self._author)
  
         x = numpy.linspace(0, 10, 1000)
         # add branches with nested branches and data
@@ -96,7 +103,8 @@ class TestStructuredDataset(unittest.TestCase):
     def test_read(self) -> None:
         # create an empty data-set
         dataset = structures.StructuredDataSet.create_dataset(self._test_path,
-                                                              "read_write")
+                                                              "read_write",
+                                                              self._author)
         # fill up the data-set with random data
         n_branches = 10
         depth = 3

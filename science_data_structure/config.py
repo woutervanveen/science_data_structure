@@ -1,8 +1,7 @@
-from science_data_structure.core import Singleton, JSONObject
-from typing import List
+from core import Singleton, JSONObject
 from pathlib import Path
-from science_data_structure.tools import files as file_tools
-from science_data_structure.author import Author
+from tools import files as file_tools
+from author import Author
 
 
 class ConfigManager(JSONObject,

@@ -1,6 +1,6 @@
 from datetime import datetime
 import uuid
-from science_data_structure.core import JSONObject
+from core import JSONObject
 
 
 class Author(JSONObject):
